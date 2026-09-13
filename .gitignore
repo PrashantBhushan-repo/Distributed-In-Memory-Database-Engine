@@ -1,0 +1,44 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.out
+
+# IDE
+.idea/
+.vscode/
+.vs/
+
+# OS
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+Makefile
+install_manifest.txt
+
+# Coverage
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+# Profiling
+perf.data
+perf.data.old
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.swp
