@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(
-    PBRedisDB
+    redisx
     VERSION 0.1.0
-    DESCRIPTION "A high-performance distributed in-memory database engine"
+    DESCRIPTION "Industry-Level Redis-Compatible In-Memory Database"
     LANGUAGES CXX
 )
 
@@ -12,75 +12,96 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ------------------------------------------------------------
-# Compiler warnings
+# Options & Sanitizers
 # ------------------------------------------------------------
+option(REDISX_BUILD_TESTS "Build RedisX test suite" ON)
+option(REDISX_ENABLE_SANITIZER_ADDRESS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(REDISX_ENABLE_SANITIZER_THREAD "Enable ThreadSanitizer" OFF)
 
+set(REDISX_WARN_FLAGS "")
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(
+    set(REDISX_WARN_FLAGS
         -Wall
         -Wextra
         -Wpedantic
         -Wconversion
         -Wsign-conversion
+        -Werror
     )
 endif()
 
-# ------------------------------------------------------------
-# Main library
-# ------------------------------------------------------------
+if (REDISX_ENABLE_SANITIZER_ADDRESS)
+    message(STATUS "Enabling AddressSanitizer and UndefinedBehaviorSanitizer")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+elseif (REDISX_ENABLE_SANITIZER_THREAD)
+    message(STATUS "Enabling ThreadSanitizer")
+    add_compile_options(-fsanitize=thread)
+    add_link_options(-fsanitize=thread)
+endif()
 
-add_library(PBRedisDB_core
-    src/server/tcp_server.cpp
-    src/common/logger.cpp
+# ------------------------------------------------------------
+# Core Library
+# ------------------------------------------------------------
+add_library(redisx_core
+    src/core/buffer.cpp
+    src/core/logging.cpp
+    src/core/time.cpp
 )
 
-target_include_directories(
-    PBRedisDB_core
+target_include_directories(redisx_core
     PUBLIC
         ${PROJECT_SOURCE_DIR}/include
 )
 
-# ------------------------------------------------------------
-# Server executable
-# ------------------------------------------------------------
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_core PRIVATE ${REDISX_WARN_FLAGS})
+endif()
 
-add_executable(
-    PBRedisDB-server
+# ------------------------------------------------------------
+# Networking Library
+# ------------------------------------------------------------
+add_library(redisx_net
+    src/net/socket_utils.cpp
+    src/net/event_loop.cpp
+    src/net/connection.cpp
+    src/net/listener.cpp
+)
+
+target_include_directories(redisx_net
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_net
+    PUBLIC
+        redisx_core
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_net PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Server Executable
+# ------------------------------------------------------------
+add_executable(redisx
     src/main.cpp
 )
 
-target_link_libraries(
-    PBRedisDB-server
+target_link_libraries(redisx
     PRIVATE
-            PBRedisDB_core
+        redisx_net
 )
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx PRIVATE ${REDISX_WARN_FLAGS})
+endif()
 
 # ------------------------------------------------------------
 # Testing
 # ------------------------------------------------------------
-
-option(PBRedisDB_BUILD_TESTS "Build PBRedisDB tests" ON)
-
-if (PBRedisDB_BUILD_TESTS)
-
+if (REDISX_BUILD_TESTS)
     enable_testing()
-
-    find_package(GTest REQUIRED)
-
-    add_executable(
-        PBRedisDB_tests
-        tests/server_test.cpp
-    )
-
-    target_link_libraries(
-        PBRedisDB_tests
-        PRIVATE
-            PBRedisDB_core
-            GTest::gtest_main
-    )
-
-    include(GoogleTest)
-
-    gtest_discover_tests(PBRedisDB_tests)
-
+    add_subdirectory(tests)
 endif()

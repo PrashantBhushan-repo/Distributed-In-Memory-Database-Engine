@@ -1,0 +1,100 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug Build",
+      "inherits": "default-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "REDISX_ENABLE_SANITIZER_ADDRESS": "OFF",
+        "REDISX_ENABLE_SANITIZER_THREAD": "OFF"
+      }
+    },
+    {
+      "name": "asan",
+      "displayName": "ASan + UBSan Build",
+      "inherits": "default-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "REDISX_ENABLE_SANITIZER_ADDRESS": "ON",
+        "REDISX_ENABLE_SANITIZER_THREAD": "OFF"
+      }
+    },
+    {
+      "name": "tsan",
+      "displayName": "ThreadSanitizer Build",
+      "inherits": "default-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "REDISX_ENABLE_SANITIZER_ADDRESS": "OFF",
+        "REDISX_ENABLE_SANITIZER_THREAD": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release Build",
+      "inherits": "default-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "REDISX_ENABLE_SANITIZER_ADDRESS": "OFF",
+        "REDISX_ENABLE_SANITIZER_THREAD": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
