@@ -19,11 +19,14 @@ add_executable(unit_tests
     unit/buffer_test.cpp
     unit/time_test.cpp
     unit/event_loop_test.cpp
+    unit/resp_reader_test.cpp
+    unit/resp_writer_test.cpp
 )
 
 target_link_libraries(unit_tests
     PRIVATE
         redisx_net
+        redisx_proto
         gtest_main
 )
 
@@ -38,11 +41,13 @@ gtest_discover_tests(unit_tests)
 # ------------------------------------------------------------
 add_executable(integration_tests
     integration/echo_test.cpp
+    integration/resp_test.cpp
 )
 
 target_link_libraries(integration_tests
     PRIVATE
         redisx_net
+        redisx_proto
         gtest_main
 )
 
@@ -51,3 +56,20 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
 endif()
 
 gtest_discover_tests(integration_tests)
+
+# ------------------------------------------------------------
+# Fuzzing Targets
+# ------------------------------------------------------------
+if (REDISX_BUILD_FUZZERS)
+    add_executable(resp_fuzz
+        fuzz/resp_fuzz.cpp
+    )
+
+    target_link_libraries(resp_fuzz
+        PRIVATE
+            redisx_proto
+    )
+
+    target_compile_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)
+endif()

@@ -2,6 +2,8 @@
 #include "redisx/net/connection.h"
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
+#include "redisx/proto/resp_reader.h"
+#include "redisx/proto/resp_writer.h"
 
 #include <csignal>
 #include <cstdlib>
@@ -51,21 +53,67 @@ int main(int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
-    REDISX_LOG_INFO("Starting RedisX server v0.1.0");
+    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (RESP2 Protocol Engine)");
 
     redisx::net::EventLoop loop;
     g_loop = &loop;
 
     redisx::net::Listener listener(loop, host, port);
 
-    // Stage 1 Echo Server handler
+    // RESP2 Command Dispatcher for Stage 2
     listener.set_new_connection_callback([](std::shared_ptr<redisx::net::Connection> conn) {
         auto &in_buf = conn->in_buffer();
-        size_t len = in_buf.readable_bytes();
-        if (len > 0) {
-            conn->send(in_buf.readable_data(), len);
-            in_buf.consume(len);
+        auto &out_buf = conn->out_buffer();
+
+        while (in_buf.readable_bytes() > 0) {
+            auto result = redisx::proto::RespReader::parse(in_buf);
+            if (result.is_error()) {
+                REDISX_LOG_WARN("Protocol error on fd %d, closing connection", conn->fd());
+                redisx::proto::RespWriter::write_error(
+                    out_buf, "ERR Protocol error: invalid multibulk length or format");
+                conn->close();
+                break;
+            }
+
+            if (!result.value().has_value()) {
+                // Incomplete command, wait for more data
+                break;
+            }
+
+            const auto &cmd = result.value().value();
+            std::string cmd_name = cmd.name_upper();
+
+            if (cmd_name == "PING") {
+                if (cmd.arg_count() <= 1) {
+                    redisx::proto::RespWriter::write_simple_string(out_buf, "PONG");
+                } else {
+                    redisx::proto::RespWriter::write_bulk_string(out_buf, cmd.arg(1));
+                }
+            } else if (cmd_name == "ECHO") {
+                if (cmd.arg_count() == 2) {
+                    redisx::proto::RespWriter::write_bulk_string(out_buf, cmd.arg(1));
+                } else {
+                    redisx::proto::RespWriter::write_error(
+                        out_buf, "ERR wrong number of arguments for 'echo' command");
+                }
+            } else if (cmd_name == "COMMAND") {
+                // Minimal reply for COMMAND / COMMAND DOCS to allow redis-cli to connect cleanly
+                redisx::proto::RespWriter::write_command_docs(out_buf);
+            } else {
+                std::string err_msg = "ERR unknown command '" + cmd_name + "'";
+                if (cmd.arg_count() > 1) {
+                    err_msg += ", with args: ";
+                    for (size_t i = 1; i < cmd.arg_count(); ++i) {
+                        if (i > 1) {
+                            err_msg += ", ";
+                        }
+                        err_msg += "'" + cmd.arg(i) + "'";
+                    }
+                }
+                redisx::proto::RespWriter::write_error(out_buf, err_msg);
+            }
         }
+        conn->flush();
     });
 
     auto result = listener.start();
@@ -74,7 +122,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    REDISX_LOG_INFO("RedisX TCP echo server running on %s:%u", host.c_str(), port);
+    REDISX_LOG_INFO("RedisX RESP2 server running on %s:%u", host.c_str(), port);
     loop.run();
 
     REDISX_LOG_INFO("RedisX server stopped cleanly.");

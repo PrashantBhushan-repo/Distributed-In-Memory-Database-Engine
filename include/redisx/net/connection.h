@@ -34,6 +34,7 @@ class Connection : public std::enable_shared_from_this<Connection> {
     // Data send API
     void send(const void *data, size_t len);
     void send(std::string_view sv);
+    void flush();
 
     [[nodiscard]] int fd() const noexcept { return fd_; }
     [[nodiscard]] ConnectionState state() const noexcept { return state_; }
