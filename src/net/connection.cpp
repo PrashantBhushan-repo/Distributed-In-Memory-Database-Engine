@@ -62,6 +62,12 @@ void Connection::send(std::string_view sv) {
     send(sv.data(), sv.size());
 }
 
+void Connection::flush() {
+    if (!is_closed_) {
+        handle_write();
+    }
+}
+
 void Connection::update_epoll_events() {
     if (is_closed_) {
         return;

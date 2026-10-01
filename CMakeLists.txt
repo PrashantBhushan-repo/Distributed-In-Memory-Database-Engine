@@ -15,6 +15,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Options & Sanitizers
 # ------------------------------------------------------------
 option(REDISX_BUILD_TESTS "Build RedisX test suite" ON)
+option(REDISX_BUILD_FUZZERS "Build libFuzzer fuzzing targets" OFF)
 option(REDISX_ENABLE_SANITIZER_ADDRESS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(REDISX_ENABLE_SANITIZER_THREAD "Enable ThreadSanitizer" OFF)
 
@@ -59,6 +60,29 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
 endif()
 
 # ------------------------------------------------------------
+# RESP Protocol Library
+# ------------------------------------------------------------
+add_library(redisx_proto
+    src/proto/inline_commands.cpp
+    src/proto/resp_reader.cpp
+    src/proto/resp_writer.cpp
+)
+
+target_include_directories(redisx_proto
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_proto
+    PUBLIC
+        redisx_core
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_proto PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
 # Networking Library
 # ------------------------------------------------------------
 add_library(redisx_net
@@ -76,6 +100,7 @@ target_include_directories(redisx_net
 target_link_libraries(redisx_net
     PUBLIC
         redisx_core
+        redisx_proto
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -92,6 +117,7 @@ add_executable(redisx
 target_link_libraries(redisx
     PRIVATE
         redisx_net
+        redisx_proto
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -99,7 +125,7 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
 endif()
 
 # ------------------------------------------------------------
-# Testing
+# Testing & Fuzzing
 # ------------------------------------------------------------
 if (REDISX_BUILD_TESTS)
     enable_testing()
