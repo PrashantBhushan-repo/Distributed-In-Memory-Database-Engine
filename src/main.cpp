@@ -1,4 +1,7 @@
+#include "redisx/commands/dispatcher.h"
+#include "redisx/commands/string_cmds.h"
 #include "redisx/core/logging.h"
+#include "redisx/db/keyspace.h"
 #include "redisx/net/connection.h"
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
@@ -8,8 +11,10 @@
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 static redisx::net::EventLoop *g_loop = nullptr;
 
@@ -53,22 +58,46 @@ int main(int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
-    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (RESP2 Protocol Engine)");
+    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 3 Storage Engine)");
 
     redisx::net::EventLoop loop;
     g_loop = &loop;
 
+    // Stage 3 Storage Keyspace & Command Dispatcher
+    redisx::db::Keyspace keyspace;
+    redisx::commands::Dispatcher dispatcher;
+    redisx::commands::register_string_commands(dispatcher);
+
+    // Track active database index per connection fd
+    std::unordered_map<int, std::size_t> conn_db_map;
+
+    // Register periodic idle timer for background incremental rehashing (every 100ms)
+    loop.add_timer(100, [&keyspace]() {
+        keyspace.rehash_step_all(100);
+        return true; // Recurring timer
+    });
+
     redisx::net::Listener listener(loop, host, port);
 
-    // RESP2 Command Dispatcher for Stage 2
-    listener.set_new_connection_callback([](std::shared_ptr<redisx::net::Connection> conn) {
+    listener.set_new_connection_callback([&dispatcher, &keyspace, &conn_db_map](
+                                              std::shared_ptr<redisx::net::Connection> conn) {
         auto &in_buf = conn->in_buffer();
         auto &out_buf = conn->out_buffer();
+        int fd = conn->fd();
+
+        if (conn_db_map.find(fd) == conn_db_map.end()) {
+            conn_db_map[fd] = 0; // Default DB 0
+            conn->set_close_callback([&conn_db_map](std::shared_ptr<redisx::net::Connection> c) {
+                conn_db_map.erase(c->fd());
+            });
+        }
+
+        std::size_t active_db = conn_db_map[fd];
 
         while (in_buf.readable_bytes() > 0) {
             auto result = redisx::proto::RespReader::parse(in_buf);
             if (result.is_error()) {
-                REDISX_LOG_WARN("Protocol error on fd %d, closing connection", conn->fd());
+                REDISX_LOG_WARN("Protocol error on fd %d, closing connection", fd);
                 redisx::proto::RespWriter::write_error(
                     out_buf, "ERR Protocol error: invalid multibulk length or format");
                 conn->close();
@@ -76,43 +105,17 @@ int main(int argc, char *argv[]) {
             }
 
             if (!result.value().has_value()) {
-                // Incomplete command, wait for more data
-                break;
+                break; // Incomplete command, wait for more data
             }
 
             const auto &cmd = result.value().value();
-            std::string cmd_name = cmd.name_upper();
+            std::size_t out_db = active_db;
 
-            if (cmd_name == "PING") {
-                if (cmd.arg_count() <= 1) {
-                    redisx::proto::RespWriter::write_simple_string(out_buf, "PONG");
-                } else {
-                    redisx::proto::RespWriter::write_bulk_string(out_buf, cmd.arg(1));
-                }
-            } else if (cmd_name == "ECHO") {
-                if (cmd.arg_count() == 2) {
-                    redisx::proto::RespWriter::write_bulk_string(out_buf, cmd.arg(1));
-                } else {
-                    redisx::proto::RespWriter::write_error(
-                        out_buf, "ERR wrong number of arguments for 'echo' command");
-                }
-            } else if (cmd_name == "COMMAND") {
-                // Minimal reply for COMMAND / COMMAND DOCS to allow redis-cli to connect cleanly
-                redisx::proto::RespWriter::write_command_docs(out_buf);
-            } else {
-                std::string err_msg = "ERR unknown command '" + cmd_name + "'";
-                if (cmd.arg_count() > 1) {
-                    err_msg += ", with args: ";
-                    for (size_t i = 1; i < cmd.arg_count(); ++i) {
-                        if (i > 1) {
-                            err_msg += ", ";
-                        }
-                        err_msg += "'" + cmd.arg(i) + "'";
-                    }
-                }
-                redisx::proto::RespWriter::write_error(out_buf, err_msg);
-            }
+            dispatcher.dispatch(cmd, keyspace, active_db, out_buf, out_db);
+            active_db = out_db;
         }
+
+        conn_db_map[fd] = active_db;
         conn->flush();
     });
 
@@ -122,7 +125,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    REDISX_LOG_INFO("RedisX RESP2 server running on %s:%u", host.c_str(), port);
+    REDISX_LOG_INFO("RedisX Stage 3 Server running on %s:%u", host.c_str(), port);
     loop.run();
 
     REDISX_LOG_INFO("RedisX server stopped cleanly.");
