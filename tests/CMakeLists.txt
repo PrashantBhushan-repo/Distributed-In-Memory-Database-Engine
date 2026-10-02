@@ -21,12 +21,17 @@ add_executable(unit_tests
     unit/event_loop_test.cpp
     unit/resp_reader_test.cpp
     unit/resp_writer_test.cpp
+    unit/dict_test.cpp
+    unit/rehash_test.cpp
+    unit/keyspace_test.cpp
 )
 
 target_link_libraries(unit_tests
     PRIVATE
         redisx_net
         redisx_proto
+        redisx_db
+        redisx_commands
         gtest_main
 )
 
@@ -42,12 +47,15 @@ gtest_discover_tests(unit_tests)
 add_executable(integration_tests
     integration/echo_test.cpp
     integration/resp_test.cpp
+    integration/storage_test.cpp
 )
 
 target_link_libraries(integration_tests
     PRIVATE
         redisx_net
         redisx_proto
+        redisx_db
+        redisx_commands
         gtest_main
 )
 
@@ -68,6 +76,8 @@ if (REDISX_BUILD_FUZZERS)
     target_link_libraries(resp_fuzz
         PRIVATE
             redisx_proto
+            redisx_db
+            redisx_commands
     )
 
     target_compile_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)

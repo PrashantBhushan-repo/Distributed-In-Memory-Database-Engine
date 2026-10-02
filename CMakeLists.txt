@@ -46,6 +46,7 @@ endif()
 # ------------------------------------------------------------
 add_library(redisx_core
     src/core/buffer.cpp
+    src/core/hash.cpp
     src/core/logging.cpp
     src/core/time.cpp
 )
@@ -57,6 +58,28 @@ target_include_directories(redisx_core
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx_core PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Database Storage Engine Library
+# ------------------------------------------------------------
+add_library(redisx_db
+    src/db/dict.cpp
+    src/db/keyspace.cpp
+)
+
+target_include_directories(redisx_db
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_db
+    PUBLIC
+        redisx_core
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_db PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
 # ------------------------------------------------------------
@@ -83,6 +106,30 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
 endif()
 
 # ------------------------------------------------------------
+# Command Dispatcher & Commands Library
+# ------------------------------------------------------------
+add_library(redisx_commands
+    src/commands/dispatcher.cpp
+    src/commands/string_cmds.cpp
+)
+
+target_include_directories(redisx_commands
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_commands
+    PUBLIC
+        redisx_core
+        redisx_proto
+        redisx_db
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_commands PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
 # Networking Library
 # ------------------------------------------------------------
 add_library(redisx_net
@@ -101,6 +148,8 @@ target_link_libraries(redisx_net
     PUBLIC
         redisx_core
         redisx_proto
+        redisx_db
+        redisx_commands
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -118,6 +167,8 @@ target_link_libraries(redisx
     PRIVATE
         redisx_net
         redisx_proto
+        redisx_db
+        redisx_commands
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
