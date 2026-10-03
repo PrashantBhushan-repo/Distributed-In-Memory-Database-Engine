@@ -1,56 +1,49 @@
 #ifndef REDISX_DB_ENTRY_H
 #define REDISX_DB_ENTRY_H
 
+#include "redisx/types/object.h"
+
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
 
 namespace redisx::db {
 
-enum class ValueType : std::uint8_t {
-    String = 0,
-    List,
-    Hash,
-    Set,
-    ZSet
-};
-
-constexpr std::string_view to_string(ValueType type) noexcept {
-    switch (type) {
-    case ValueType::String: return "string";
-    case ValueType::List:   return "list";
-    case ValueType::Hash:   return "hash";
-    case ValueType::Set:    return "set";
-    case ValueType::ZSet:   return "zset";
-    }
-    return "unknown";
-}
+using ValueType = redisx::types::ObjectType;
 
 class Value {
   public:
-    Value() : data_(std::string{}) {}
-    explicit Value(std::string str) : data_(std::move(str)) {}
+    Value() : obj_(std::string{}) {}
+    explicit Value(std::string str) : obj_(std::move(str)) {}
+    explicit Value(types::Object obj) : obj_(std::move(obj)) {}
 
     [[nodiscard]] ValueType type() const noexcept {
-        return static_cast<ValueType>(data_.index());
+        return obj_.type();
     }
 
     [[nodiscard]] bool is_string() const noexcept {
-        return std::holds_alternative<std::string>(data_);
+        return obj_.type() == ValueType::String;
     }
 
     [[nodiscard]] const std::string &as_string() const {
-        return std::get<std::string>(data_);
+        return obj_.as_string();
     }
 
     [[nodiscard]] std::string &as_string() {
-        return std::get<std::string>(data_);
+        return obj_.as_string();
+    }
+
+    [[nodiscard]] const types::Object &object() const noexcept {
+        return obj_;
+    }
+
+    [[nodiscard]] types::Object &object() noexcept {
+        return obj_;
     }
 
   private:
-    std::variant<std::string> data_;
+    types::Object obj_;
 };
 
 struct Entry {

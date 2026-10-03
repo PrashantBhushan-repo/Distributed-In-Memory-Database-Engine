@@ -61,6 +61,31 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
 endif()
 
 # ------------------------------------------------------------
+# Data Types & Encodings Library
+# ------------------------------------------------------------
+add_library(redisx_types
+    src/types/listpack.cpp
+    src/types/intset.cpp
+    src/types/skiplist.cpp
+    src/types/quicklist.cpp
+    src/types/object.cpp
+)
+
+target_include_directories(redisx_types
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_types
+    PUBLIC
+        redisx_core
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_types PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
 # Database Storage Engine Library
 # ------------------------------------------------------------
 add_library(redisx_db
@@ -77,6 +102,7 @@ target_include_directories(redisx_db
 target_link_libraries(redisx_db
     PUBLIC
         redisx_core
+        redisx_types
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -113,6 +139,10 @@ add_library(redisx_commands
     src/commands/dispatcher.cpp
     src/commands/expire_cmds.cpp
     src/commands/string_cmds.cpp
+    src/commands/list_cmds.cpp
+    src/commands/hash_cmds.cpp
+    src/commands/set_cmds.cpp
+    src/commands/zset_cmds.cpp
 )
 
 target_include_directories(redisx_commands
@@ -125,6 +155,7 @@ target_link_libraries(redisx_commands
         redisx_core
         redisx_proto
         redisx_db
+        redisx_types
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -152,6 +183,7 @@ target_link_libraries(redisx_net
         redisx_proto
         redisx_db
         redisx_commands
+        redisx_types
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -171,6 +203,7 @@ target_link_libraries(redisx
         redisx_proto
         redisx_db
         redisx_commands
+        redisx_types
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")

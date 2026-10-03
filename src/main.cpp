@@ -1,6 +1,10 @@
 #include "redisx/commands/dispatcher.h"
 #include "redisx/commands/expire_cmds.h"
+#include "redisx/commands/hash_cmds.h"
+#include "redisx/commands/list_cmds.h"
+#include "redisx/commands/set_cmds.h"
 #include "redisx/commands/string_cmds.h"
+#include "redisx/commands/zset_cmds.h"
 #include "redisx/core/logging.h"
 #include "redisx/db/keyspace.h"
 #include "redisx/db/ttl.h"
@@ -60,18 +64,22 @@ int main(int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
-    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 4 Expiration Engine)");
+    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 5 Collection Types & Encodings Engine)");
 
     redisx::net::EventLoop loop;
     g_loop = &loop;
 
-    // Stage 4 Storage Keyspace, TTL Manager & Command Dispatcher
+    // Stage 5 Storage Keyspace, TTL Manager & Command Dispatcher
     redisx::db::Keyspace keyspace;
     redisx::db::TTLManager ttl_mgr;
     redisx::commands::Dispatcher dispatcher;
 
     redisx::commands::register_expire_commands(dispatcher, ttl_mgr);
     redisx::commands::register_string_commands(dispatcher, ttl_mgr);
+    redisx::commands::register_list_commands(dispatcher);
+    redisx::commands::register_hash_commands(dispatcher);
+    redisx::commands::register_set_commands(dispatcher);
+    redisx::commands::register_zset_commands(dispatcher);
 
     // Track active database index per connection fd
     std::unordered_map<int, std::size_t> conn_db_map;
@@ -86,7 +94,7 @@ int main(int argc, char *argv[]) {
     redisx::net::Listener listener(loop, host, port);
 
     listener.set_new_connection_callback([&dispatcher, &keyspace, &conn_db_map](
-                                              std::shared_ptr<redisx::net::Connection> conn) {
+                                               std::shared_ptr<redisx::net::Connection> conn) {
         auto &in_buf = conn->in_buffer();
         auto &out_buf = conn->out_buffer();
         int fd = conn->fd();
@@ -131,7 +139,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    REDISX_LOG_INFO("RedisX Stage 3 Server running on %s:%u", host.c_str(), port);
+    REDISX_LOG_INFO("RedisX Stage 5 Server running on %s:%u", host.c_str(), port);
     loop.run();
 
     REDISX_LOG_INFO("RedisX server stopped cleanly.");

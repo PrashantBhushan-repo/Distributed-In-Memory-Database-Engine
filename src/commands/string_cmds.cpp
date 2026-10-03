@@ -619,7 +619,7 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
             if (e == nullptr) {
                 proto::RespWriter::write_simple_string(out_buf, "none");
             } else {
-                proto::RespWriter::write_simple_string(out_buf, db::to_string(e->value.type()));
+                proto::RespWriter::write_simple_string(out_buf, redisx::types::to_string(e->value.type()));
             }
         }
     });
