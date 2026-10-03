@@ -132,7 +132,7 @@ bool string_match_glob(std::string_view pattern, std::string_view string, bool i
     return (p == p_end && s == s_end);
 }
 
-void register_string_commands(Dispatcher &dispatcher) {
+void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
     // ------------------------------------------------------------
     // PING
     // ------------------------------------------------------------
@@ -224,20 +224,25 @@ void register_string_commands(Dispatcher &dispatcher) {
     });
 
     // ------------------------------------------------------------
-    // SET key value [NX|XX] [GET]
+    // SET key value [NX|XX] [GET] [EX s|PX ms|EXAT s|PXAT ms|KEEPTTL]
     // ------------------------------------------------------------
     dispatcher.register_command({
         "SET",
         -3,
         CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
             const std::string &val = cmd.arg(2);
 
             bool nx = false;
             bool xx = false;
             bool get_opt = false;
+            bool keepttl = false;
+            std::uint64_t expire_at_ms = 0;
+            bool set_expire = false;
+
+            std::uint64_t now = ttl_mgr.time_provider().monotonic_now_ms();
 
             for (std::size_t i = 3; i < cmd.arg_count(); ++i) {
                 std::string opt = to_upper(cmd.arg(i));
@@ -247,6 +252,40 @@ void register_string_commands(Dispatcher &dispatcher) {
                     xx = true;
                 } else if (opt == "GET") {
                     get_opt = true;
+                } else if (opt == "KEEPTTL") {
+                    keepttl = true;
+                } else if (opt == "EX" && i + 1 < cmd.arg_count()) {
+                    std::int64_t s = 0;
+                    if (!parse_int64(cmd.arg(++i), s) || s <= 0) {
+                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
+                        return;
+                    }
+                    expire_at_ms = now + static_cast<std::uint64_t>(s) * 1000;
+                    set_expire = true;
+                } else if (opt == "PX" && i + 1 < cmd.arg_count()) {
+                    std::int64_t ms = 0;
+                    if (!parse_int64(cmd.arg(++i), ms) || ms <= 0) {
+                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
+                        return;
+                    }
+                    expire_at_ms = now + static_cast<std::uint64_t>(ms);
+                    set_expire = true;
+                } else if (opt == "EXAT" && i + 1 < cmd.arg_count()) {
+                    std::int64_t ts_s = 0;
+                    if (!parse_int64(cmd.arg(++i), ts_s) || ts_s <= 0) {
+                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
+                        return;
+                    }
+                    expire_at_ms = static_cast<std::uint64_t>(ts_s) * 1000;
+                    set_expire = true;
+                } else if (opt == "PXAT" && i + 1 < cmd.arg_count()) {
+                    std::int64_t ts_ms = 0;
+                    if (!parse_int64(cmd.arg(++i), ts_ms) || ts_ms <= 0) {
+                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
+                        return;
+                    }
+                    expire_at_ms = static_cast<std::uint64_t>(ts_ms);
+                    set_expire = true;
                 }
             }
 
@@ -254,6 +293,9 @@ void register_string_commands(Dispatcher &dispatcher) {
                 proto::RespWriter::write_error(out_buf, "ERR syntax error");
                 return;
             }
+
+            // Lazy expire check first
+            ttl_mgr.expire_if_needed(keyspace, db_idx, key);
 
             bool exists = keyspace.db_exists(db_idx, key);
             if (nx && exists) {
@@ -285,7 +327,17 @@ void register_string_commands(Dispatcher &dispatcher) {
                 }
             }
 
-            keyspace.db_set(db_idx, key, db::Value(val));
+            std::uint64_t target_expire = 0;
+            if (set_expire) {
+                target_expire = expire_at_ms;
+            } else if (keepttl && exists) {
+                db::Entry *e = keyspace.db_get(db_idx, key);
+                if (e != nullptr) {
+                    target_expire = e->expire_at_ms;
+                }
+            } // Else plain SET clears TTL (target_expire = 0)
+
+            keyspace.db_set(db_idx, key, db::Value(val), target_expire);
 
             if (get_opt) {
                 if (had_old_val) {
@@ -306,9 +358,15 @@ void register_string_commands(Dispatcher &dispatcher) {
         "GET",
         2,
         CMD_FLAG_READONLY,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            db::Entry *e = keyspace.db_get(db_idx, cmd.arg(1));
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+            const std::string &key = cmd.arg(1);
+            if (ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
+                proto::RespWriter::write_null_bulk(out_buf);
+                return;
+            }
+
+            db::Entry *e = keyspace.db_get(db_idx, key);
             if (e == nullptr) {
                 proto::RespWriter::write_null_bulk(out_buf);
                 return;
@@ -331,11 +389,13 @@ void register_string_commands(Dispatcher &dispatcher) {
         "DEL",
         -2,
         CMD_FLAG_WRITE,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             std::int64_t deleted_count = 0;
             for (std::size_t i = 1; i < cmd.arg_count(); ++i) {
-                if (keyspace.db_delete(db_idx, cmd.arg(i))) {
+                const std::string &key = cmd.arg(i);
+                ttl_mgr.expire_if_needed(keyspace, db_idx, key);
+                if (keyspace.db_delete(db_idx, key)) {
                     deleted_count++;
                 }
             }
@@ -350,12 +410,15 @@ void register_string_commands(Dispatcher &dispatcher) {
         "EXISTS",
         -2,
         CMD_FLAG_READONLY,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             std::int64_t exist_count = 0;
             for (std::size_t i = 1; i < cmd.arg_count(); ++i) {
-                if (keyspace.db_exists(db_idx, cmd.arg(i))) {
-                    exist_count++;
+                const std::string &key = cmd.arg(i);
+                if (!ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
+                    if (keyspace.db_exists(db_idx, key)) {
+                        exist_count++;
+                    }
                 }
             }
             proto::RespWriter::write_integer(out_buf, exist_count);
@@ -369,11 +432,12 @@ void register_string_commands(Dispatcher &dispatcher) {
         "APPEND",
         3,
         CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
             const std::string &append_val = cmd.arg(2);
 
+            ttl_mgr.expire_if_needed(keyspace, db_idx, key);
             db::Entry *e = keyspace.db_get(db_idx, key);
             if (e == nullptr) {
                 keyspace.db_set(db_idx, key, db::Value(append_val));
@@ -400,9 +464,15 @@ void register_string_commands(Dispatcher &dispatcher) {
         "STRLEN",
         2,
         CMD_FLAG_READONLY,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            db::Entry *e = keyspace.db_get(db_idx, cmd.arg(1));
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+            const std::string &key = cmd.arg(1);
+            if (ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
+                proto::RespWriter::write_integer(out_buf, 0);
+                return;
+            }
+
+            db::Entry *e = keyspace.db_get(db_idx, key);
             if (e == nullptr) {
                 proto::RespWriter::write_integer(out_buf, 0);
                 return;
@@ -426,12 +496,14 @@ void register_string_commands(Dispatcher &dispatcher) {
         "INCR",
         2,
         CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
+            ttl_mgr.expire_if_needed(keyspace, db_idx, key);
             db::Entry *e = keyspace.db_get(db_idx, key);
 
             std::int64_t val = 0;
+            std::uint64_t existing_ttl = 0;
             if (e != nullptr) {
                 if (!e->value.is_string()) {
                     proto::RespWriter::write_error(
@@ -443,10 +515,11 @@ void register_string_commands(Dispatcher &dispatcher) {
                         out_buf, "ERR value is not an integer or out of range");
                     return;
                 }
+                existing_ttl = e->expire_at_ms;
             }
 
             val++;
-            keyspace.db_set(db_idx, key, db::Value(std::to_string(val)));
+            keyspace.db_set(db_idx, key, db::Value(std::to_string(val)), existing_ttl);
             proto::RespWriter::write_integer(out_buf, val);
         }
     });
@@ -458,12 +531,14 @@ void register_string_commands(Dispatcher &dispatcher) {
         "DECR",
         2,
         CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
+            ttl_mgr.expire_if_needed(keyspace, db_idx, key);
             db::Entry *e = keyspace.db_get(db_idx, key);
 
             std::int64_t val = 0;
+            std::uint64_t existing_ttl = 0;
             if (e != nullptr) {
                 if (!e->value.is_string()) {
                     proto::RespWriter::write_error(
@@ -475,10 +550,11 @@ void register_string_commands(Dispatcher &dispatcher) {
                         out_buf, "ERR value is not an integer or out of range");
                     return;
                 }
+                existing_ttl = e->expire_at_ms;
             }
 
             val--;
-            keyspace.db_set(db_idx, key, db::Value(std::to_string(val)));
+            keyspace.db_set(db_idx, key, db::Value(std::to_string(val)), existing_ttl);
             proto::RespWriter::write_integer(out_buf, val);
         }
     });
@@ -490,8 +566,8 @@ void register_string_commands(Dispatcher &dispatcher) {
         "INCRBY",
         3,
         CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
             std::int64_t incr = 0;
             if (!parse_int64(cmd.arg(2), incr)) {
@@ -500,8 +576,10 @@ void register_string_commands(Dispatcher &dispatcher) {
                 return;
             }
 
+            ttl_mgr.expire_if_needed(keyspace, db_idx, key);
             db::Entry *e = keyspace.db_get(db_idx, key);
             std::int64_t val = 0;
+            std::uint64_t existing_ttl = 0;
             if (e != nullptr) {
                 if (!e->value.is_string()) {
                     proto::RespWriter::write_error(
@@ -513,10 +591,11 @@ void register_string_commands(Dispatcher &dispatcher) {
                         out_buf, "ERR value is not an integer or out of range");
                     return;
                 }
+                existing_ttl = e->expire_at_ms;
             }
 
             val += incr;
-            keyspace.db_set(db_idx, key, db::Value(std::to_string(val)));
+            keyspace.db_set(db_idx, key, db::Value(std::to_string(val)), existing_ttl);
             proto::RespWriter::write_integer(out_buf, val);
         }
     });
@@ -528,9 +607,15 @@ void register_string_commands(Dispatcher &dispatcher) {
         "TYPE",
         2,
         CMD_FLAG_READONLY,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            db::Entry *e = keyspace.db_get(db_idx, cmd.arg(1));
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+            const std::string &key = cmd.arg(1);
+            if (ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
+                proto::RespWriter::write_simple_string(out_buf, "none");
+                return;
+            }
+
+            db::Entry *e = keyspace.db_get(db_idx, key);
             if (e == nullptr) {
                 proto::RespWriter::write_simple_string(out_buf, "none");
             } else {
@@ -546,8 +631,8 @@ void register_string_commands(Dispatcher &dispatcher) {
         "KEYS",
         2,
         CMD_FLAG_READONLY,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             std::string_view pattern = cmd.arg(1);
             std::vector<std::string> matches;
 
@@ -555,8 +640,12 @@ void register_string_commands(Dispatcher &dispatcher) {
             std::uint64_t cursor = 0;
             do {
                 cursor = dict.scan(cursor, [&](const db::Entry *e) {
-                    if (e != nullptr && string_match_glob(pattern, e->key)) {
-                        matches.push_back(e->key);
+                    if (e != nullptr) {
+                        if (!ttl_mgr.expire_if_needed(keyspace, db_idx, e->key)) {
+                            if (string_match_glob(pattern, e->key)) {
+                                matches.push_back(e->key);
+                            }
+                        }
                     }
                 });
             } while (cursor != 0);
@@ -572,8 +661,8 @@ void register_string_commands(Dispatcher &dispatcher) {
         "SCAN",
         -2,
         CMD_FLAG_READONLY,
-        [](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-           core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
+        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             std::uint64_t cursor = 0;
             if (!parse_uint64(cmd.arg(1), cursor)) {
                 proto::RespWriter::write_error(out_buf, "ERR invalid cursor");
@@ -601,8 +690,12 @@ void register_string_commands(Dispatcher &dispatcher) {
             std::uint64_t next_cursor = cursor;
             do {
                 next_cursor = dict.scan(next_cursor, [&](const db::Entry *e) {
-                    if (e != nullptr && string_match_glob(match_pattern, e->key)) {
-                        keys.push_back(e->key);
+                    if (e != nullptr) {
+                        if (!ttl_mgr.expire_if_needed(keyspace, db_idx, e->key)) {
+                            if (string_match_glob(match_pattern, e->key)) {
+                                keys.push_back(e->key);
+                            }
+                        }
                     }
                 });
             } while (next_cursor != 0 && keys.size() < count_hint);

@@ -1,7 +1,9 @@
 #include "redisx/commands/dispatcher.h"
+#include "redisx/commands/expire_cmds.h"
 #include "redisx/commands/string_cmds.h"
 #include "redisx/core/logging.h"
 #include "redisx/db/keyspace.h"
+#include "redisx/db/ttl.h"
 #include "redisx/net/connection.h"
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
@@ -58,22 +60,26 @@ int main(int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
-    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 3 Storage Engine)");
+    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 4 Expiration Engine)");
 
     redisx::net::EventLoop loop;
     g_loop = &loop;
 
-    // Stage 3 Storage Keyspace & Command Dispatcher
+    // Stage 4 Storage Keyspace, TTL Manager & Command Dispatcher
     redisx::db::Keyspace keyspace;
+    redisx::db::TTLManager ttl_mgr;
     redisx::commands::Dispatcher dispatcher;
-    redisx::commands::register_string_commands(dispatcher);
+
+    redisx::commands::register_expire_commands(dispatcher, ttl_mgr);
+    redisx::commands::register_string_commands(dispatcher, ttl_mgr);
 
     // Track active database index per connection fd
     std::unordered_map<int, std::size_t> conn_db_map;
 
-    // Register periodic idle timer for background incremental rehashing (every 100ms)
-    loop.add_timer(100, [&keyspace]() {
+    // Register periodic idle timer for background incremental rehashing & active TTL expiration (every 100ms)
+    loop.add_timer(100, [&keyspace, &ttl_mgr]() {
         keyspace.rehash_step_all(100);
+        ttl_mgr.active_expire_cycle(keyspace, 1);
         return true; // Recurring timer
     });
 
