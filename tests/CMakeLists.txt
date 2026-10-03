@@ -25,6 +25,8 @@ add_executable(unit_tests
     unit/rehash_test.cpp
     unit/keyspace_test.cpp
     unit/ttl_test.cpp
+    unit/skiplist_test.cpp
+    unit/encoding_test.cpp
 )
 
 target_link_libraries(unit_tests
@@ -33,6 +35,7 @@ target_link_libraries(unit_tests
         redisx_proto
         redisx_db
         redisx_commands
+        redisx_types
         gtest_main
 )
 
@@ -57,6 +60,7 @@ target_link_libraries(integration_tests
         redisx_proto
         redisx_db
         redisx_commands
+        redisx_types
         gtest_main
 )
 
@@ -79,6 +83,7 @@ if (REDISX_BUILD_FUZZERS)
             redisx_proto
             redisx_db
             redisx_commands
+            redisx_types
     )
 
     target_compile_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)
