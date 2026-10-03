@@ -1,6 +1,8 @@
 #include "redisx/commands/dispatcher.h"
+#include "redisx/commands/expire_cmds.h"
 #include "redisx/commands/string_cmds.h"
 #include "redisx/db/keyspace.h"
+#include "redisx/db/ttl.h"
 #include "redisx/net/connection.h"
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
@@ -26,7 +28,8 @@ using namespace redisx::db;
 class StorageIntegrationTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        register_string_commands(dispatcher_);
+        register_expire_commands(dispatcher_, ttl_mgr_);
+        register_string_commands(dispatcher_, ttl_mgr_);
 
         server_loop_ = std::make_unique<EventLoop>();
         listener_ = std::make_unique<Listener>(*server_loop_, "127.0.0.1", port_);
@@ -75,6 +78,7 @@ class StorageIntegrationTest : public ::testing::Test {
     std::unique_ptr<EventLoop> server_loop_;
     std::unique_ptr<Listener> listener_;
     std::thread server_thread_;
+    TTLManager ttl_mgr_;
     Dispatcher dispatcher_;
     Keyspace keyspace_;
     std::size_t active_db_idx_{0};

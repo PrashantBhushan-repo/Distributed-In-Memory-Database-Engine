@@ -66,6 +66,7 @@ endif()
 add_library(redisx_db
     src/db/dict.cpp
     src/db/keyspace.cpp
+    src/db/ttl.cpp
 )
 
 target_include_directories(redisx_db
@@ -110,6 +111,7 @@ endif()
 # ------------------------------------------------------------
 add_library(redisx_commands
     src/commands/dispatcher.cpp
+    src/commands/expire_cmds.cpp
     src/commands/string_cmds.cpp
 )
 

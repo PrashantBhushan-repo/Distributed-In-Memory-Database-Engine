@@ -24,6 +24,7 @@ add_executable(unit_tests
     unit/dict_test.cpp
     unit/rehash_test.cpp
     unit/keyspace_test.cpp
+    unit/ttl_test.cpp
 )
 
 target_link_libraries(unit_tests
