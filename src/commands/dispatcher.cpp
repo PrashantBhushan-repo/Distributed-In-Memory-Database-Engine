@@ -1,4 +1,5 @@
 #include "redisx/commands/dispatcher.h"
+#include "redisx/memory/accounting.h"
 #include "redisx/proto/resp_writer.h"
 
 #include <cctype>
@@ -46,7 +47,9 @@ void Dispatcher::dispatch(
     db::Keyspace &keyspace,
     std::size_t db_idx,
     core::Buffer &out_buf,
-    std::size_t &out_db_idx
+    std::size_t &out_db_idx,
+    memory::EvictionManager *evict_mgr,
+    db::TTLManager *ttl_mgr
 ) const {
     if (cmd.empty()) {
         return;
@@ -86,6 +89,18 @@ void Dispatcher::dispatch(
         std::string err = "ERR wrong number of arguments for '" + to_lower(spec->name) + "' command";
         proto::RespWriter::write_error(out_buf, err);
         return;
+    }
+
+    // Pre-command memory check & eviction
+    if (evict_mgr != nullptr && ttl_mgr != nullptr) {
+        if (evict_mgr->maxmemory() > 0) {
+            bool under_limit = evict_mgr->perform_eviction(keyspace, *ttl_mgr);
+            if (!under_limit && (spec->flags & CMD_FLAG_DENYOOM)) {
+                proto::RespWriter::write_error(
+                    out_buf, "OOM command not allowed when used memory > 'maxmemory'");
+                return;
+            }
+        }
     }
 
     // Execute command handler

@@ -110,6 +110,30 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
 endif()
 
 # ------------------------------------------------------------
+# Memory Accounting & Eviction Library
+# ------------------------------------------------------------
+add_library(redisx_memory
+    src/memory/accounting.cpp
+    src/memory/lfu.cpp
+    src/memory/eviction.cpp
+)
+
+target_include_directories(redisx_memory
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_memory
+    PUBLIC
+        redisx_core
+        redisx_db
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_memory PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
 # RESP Protocol Library
 # ------------------------------------------------------------
 add_library(redisx_proto
@@ -143,6 +167,7 @@ add_library(redisx_commands
     src/commands/hash_cmds.cpp
     src/commands/set_cmds.cpp
     src/commands/zset_cmds.cpp
+    src/commands/memory_cmds.cpp
 )
 
 target_include_directories(redisx_commands
@@ -156,6 +181,7 @@ target_link_libraries(redisx_commands
         redisx_proto
         redisx_db
         redisx_types
+        redisx_memory
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -184,6 +210,7 @@ target_link_libraries(redisx_net
         redisx_db
         redisx_commands
         redisx_types
+        redisx_memory
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
@@ -204,6 +231,7 @@ target_link_libraries(redisx
         redisx_db
         redisx_commands
         redisx_types
+        redisx_memory
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
