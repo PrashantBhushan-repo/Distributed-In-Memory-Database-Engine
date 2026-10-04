@@ -168,6 +168,7 @@ add_library(redisx_commands
     src/commands/set_cmds.cpp
     src/commands/zset_cmds.cpp
     src/commands/memory_cmds.cpp
+    src/commands/persist_cmds.cpp
 )
 
 target_include_directories(redisx_commands
@@ -186,6 +187,34 @@ target_link_libraries(redisx_commands
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx_commands PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Persistence Library
+# ------------------------------------------------------------
+add_library(redisx_persistence
+    src/persistence/snapshot_writer.cpp
+    src/persistence/snapshot_reader.cpp
+    src/persistence/aof.cpp
+    src/persistence/recovery.cpp
+)
+
+target_include_directories(redisx_persistence
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_persistence
+    PUBLIC
+        redisx_core
+        redisx_proto
+        redisx_db
+        redisx_types
+        redisx_commands
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_persistence PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
 # ------------------------------------------------------------
@@ -211,10 +240,34 @@ target_link_libraries(redisx_net
         redisx_commands
         redisx_types
         redisx_memory
+        redisx_persistence
 )
+
+if (WIN32)
+    target_link_libraries(redisx_net PUBLIC ws2_32)
+endif()
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx_net PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Tools Executables
+# ------------------------------------------------------------
+add_executable(rdbinspect
+    tools/rdbinspect.cpp
+)
+
+target_link_libraries(rdbinspect
+    PRIVATE
+        redisx_persistence
+        redisx_db
+        redisx_types
+        redisx_core
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(rdbinspect PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
 # ------------------------------------------------------------
@@ -232,6 +285,7 @@ target_link_libraries(redisx
         redisx_commands
         redisx_types
         redisx_memory
+        redisx_persistence
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
