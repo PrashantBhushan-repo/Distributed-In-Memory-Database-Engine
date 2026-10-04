@@ -2,12 +2,15 @@
 #include "redisx/commands/expire_cmds.h"
 #include "redisx/commands/hash_cmds.h"
 #include "redisx/commands/list_cmds.h"
+#include "redisx/commands/memory_cmds.h"
 #include "redisx/commands/set_cmds.h"
 #include "redisx/commands/string_cmds.h"
 #include "redisx/commands/zset_cmds.h"
 #include "redisx/core/logging.h"
 #include "redisx/db/keyspace.h"
 #include "redisx/db/ttl.h"
+#include "redisx/memory/accounting.h"
+#include "redisx/memory/eviction.h"
 #include "redisx/net/connection.h"
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
@@ -64,14 +67,15 @@ int main(int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
-    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 5 Collection Types & Encodings Engine)");
+    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 6 Memory Accounting & Eviction Engine)");
 
     redisx::net::EventLoop loop;
     g_loop = &loop;
 
-    // Stage 5 Storage Keyspace, TTL Manager & Command Dispatcher
+    // Stage 6 Storage Keyspace, TTL Manager, Eviction Manager & Command Dispatcher
     redisx::db::Keyspace keyspace;
     redisx::db::TTLManager ttl_mgr;
+    redisx::memory::EvictionManager evict_mgr;
     redisx::commands::Dispatcher dispatcher;
 
     redisx::commands::register_expire_commands(dispatcher, ttl_mgr);
@@ -80,6 +84,7 @@ int main(int argc, char *argv[]) {
     redisx::commands::register_hash_commands(dispatcher);
     redisx::commands::register_set_commands(dispatcher);
     redisx::commands::register_zset_commands(dispatcher);
+    redisx::commands::register_memory_commands(dispatcher, evict_mgr);
 
     // Track active database index per connection fd
     std::unordered_map<int, std::size_t> conn_db_map;
@@ -93,7 +98,7 @@ int main(int argc, char *argv[]) {
 
     redisx::net::Listener listener(loop, host, port);
 
-    listener.set_new_connection_callback([&dispatcher, &keyspace, &conn_db_map](
+    listener.set_new_connection_callback([&dispatcher, &keyspace, &conn_db_map, &evict_mgr, &ttl_mgr](
                                                std::shared_ptr<redisx::net::Connection> conn) {
         auto &in_buf = conn->in_buffer();
         auto &out_buf = conn->out_buffer();
@@ -125,7 +130,7 @@ int main(int argc, char *argv[]) {
             const auto &cmd = result.value().value();
             std::size_t out_db = active_db;
 
-            dispatcher.dispatch(cmd, keyspace, active_db, out_buf, out_db);
+            dispatcher.dispatch(cmd, keyspace, active_db, out_buf, out_db, &evict_mgr, &ttl_mgr);
             active_db = out_db;
         }
 
@@ -139,7 +144,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    REDISX_LOG_INFO("RedisX Stage 5 Server running on %s:%u", host.c_str(), port);
+    REDISX_LOG_INFO("RedisX Stage 6 Server running on %s:%u", host.c_str(), port);
     loop.run();
 
     REDISX_LOG_INFO("RedisX server stopped cleanly.");

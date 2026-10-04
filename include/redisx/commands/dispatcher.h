@@ -3,6 +3,8 @@
 
 #include "redisx/core/buffer.h"
 #include "redisx/db/keyspace.h"
+#include "redisx/db/ttl.h"
+#include "redisx/memory/eviction.h"
 #include "redisx/proto/command.h"
 
 #include <cstddef>
@@ -49,7 +51,9 @@ class Dispatcher {
         db::Keyspace &keyspace,
         std::size_t db_idx,
         core::Buffer &out_buf,
-        std::size_t &out_db_idx
+        std::size_t &out_db_idx,
+        memory::EvictionManager *evict_mgr = nullptr,
+        db::TTLManager *ttl_mgr = nullptr
     ) const;
 
   private:

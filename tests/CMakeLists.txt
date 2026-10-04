@@ -36,6 +36,7 @@ target_link_libraries(unit_tests
         redisx_db
         redisx_commands
         redisx_types
+        redisx_memory
         gtest_main
 )
 
@@ -52,6 +53,7 @@ add_executable(integration_tests
     integration/echo_test.cpp
     integration/resp_test.cpp
     integration/storage_test.cpp
+    integration/eviction_test.cpp
 )
 
 target_link_libraries(integration_tests
@@ -61,6 +63,7 @@ target_link_libraries(integration_tests
         redisx_db
         redisx_commands
         redisx_types
+        redisx_memory
         gtest_main
 )
 
@@ -84,6 +87,7 @@ if (REDISX_BUILD_FUZZERS)
             redisx_db
             redisx_commands
             redisx_types
+            redisx_memory
     )
 
     target_compile_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)
