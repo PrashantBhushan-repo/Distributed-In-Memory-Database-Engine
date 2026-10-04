@@ -64,7 +64,7 @@ TEST_F(CrashTest, CorruptedRdbRefusesStartup) {
     // Flip random byte in file
     std::fstream f("crash_dump.rdb", std::ios::in | std::ios::out | std::ios::binary);
     f.seekp(15);
-    f.put(0xFF);
+    f.put(static_cast<char>(0xFF));
     f.close();
 
     db::Keyspace dst_ks;

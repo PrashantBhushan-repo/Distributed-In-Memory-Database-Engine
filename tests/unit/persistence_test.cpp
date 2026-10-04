@@ -103,7 +103,7 @@ TEST_F(PersistenceTest, RdbCrcMismatchDetection) {
     // Corrupt one byte mid-file
     std::fstream f("test_dump.rdb", std::ios::in | std::ios::out | std::ios::binary);
     f.seekp(12);
-    f.put(0x7F);
+    f.put(static_cast<char>(0x7F));
     f.close();
 
     db::Keyspace dst_ks;
