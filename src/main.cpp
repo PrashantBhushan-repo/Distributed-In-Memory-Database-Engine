@@ -3,6 +3,7 @@
 #include "redisx/commands/hash_cmds.h"
 #include "redisx/commands/list_cmds.h"
 #include "redisx/commands/memory_cmds.h"
+#include "redisx/commands/persist_cmds.h"
 #include "redisx/commands/set_cmds.h"
 #include "redisx/commands/string_cmds.h"
 #include "redisx/commands/zset_cmds.h"
@@ -14,6 +15,7 @@
 #include "redisx/net/connection.h"
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
+#include "redisx/persistence/recovery.h"
 #include "redisx/proto/resp_reader.h"
 #include "redisx/proto/resp_writer.h"
 
@@ -67,12 +69,12 @@ int main(int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
 
-    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 6 Memory Accounting & Eviction Engine)");
+    REDISX_LOG_INFO("Starting RedisX server v0.1.0 (Stage 7 Persistence & Crash Recovery)");
 
     redisx::net::EventLoop loop;
     g_loop = &loop;
 
-    // Stage 6 Storage Keyspace, TTL Manager, Eviction Manager & Command Dispatcher
+    // Stage 7 Storage Keyspace, TTL Manager, Eviction Manager & Command Dispatcher
     redisx::db::Keyspace keyspace;
     redisx::db::TTLManager ttl_mgr;
     redisx::memory::EvictionManager evict_mgr;
@@ -85,6 +87,14 @@ int main(int argc, char *argv[]) {
     redisx::commands::register_set_commands(dispatcher);
     redisx::commands::register_zset_commands(dispatcher);
     redisx::commands::register_memory_commands(dispatcher, evict_mgr);
+    redisx::commands::register_persist_commands(dispatcher);
+
+    // Startup recovery (Load RDB snapshot and replay AOF log)
+    auto recovery_res = redisx::persistence::RecoveryEngine::recover(keyspace, dispatcher, "dump.rdb", "appendonly.aof");
+    if (recovery_res.is_error() && recovery_res.error() != redisx::core::ErrorCode::NotFound) {
+        REDISX_LOG_ERROR("Startup recovery failed with error code: %d", static_cast<int>(recovery_res.error()));
+        return 1;
+    }
 
     // Track active database index per connection fd
     std::unordered_map<int, std::size_t> conn_db_map;

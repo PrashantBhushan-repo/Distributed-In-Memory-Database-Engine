@@ -2,10 +2,45 @@
 #include "redisx/core/logging.h"
 #include "redisx/net/socket_utils.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <io.h>
+#ifdef ERROR
+#undef ERROR
+#endif
+
+static inline ssize_t sock_read(int fd, void *buf, size_t len) {
+    return ::recv(static_cast<SOCKET>(fd), static_cast<char *>(buf), static_cast<int>(len), 0);
+}
+
+static inline ssize_t sock_write(int fd, const void *buf, size_t len) {
+    return ::send(static_cast<SOCKET>(fd), static_cast<const char *>(buf), static_cast<int>(len), 0);
+}
+
+static inline void sock_close(int fd) {
+    ::closesocket(static_cast<SOCKET>(fd));
+}
+#else
 #include <sys/socket.h>
 #include <unistd.h>
+
+static inline ssize_t sock_read(int fd, void *buf, size_t len) {
+    return ::read(fd, buf, len);
+}
+
+static inline ssize_t sock_write(int fd, const void *buf, size_t len) {
+    return ::write(fd, buf, len);
+}
+
+static inline void sock_close(int fd) {
+    ::close(fd);
+}
+#endif
 
 namespace redisx::net {
 
@@ -17,7 +52,7 @@ Connection::Connection(EventLoop &loop, int fd, CloseCallback on_close, DataCall
 
 Connection::~Connection() {
     if (fd_ != -1) {
-        ::close(fd_);
+        sock_close(fd_);
         fd_ = -1;
     }
 }
@@ -107,7 +142,7 @@ void Connection::handle_read() {
     // Read up to MAX_READ_BATCH_BYTES to prevent event loop starvation
     in_buf_.reserve(MAX_READ_BATCH_BYTES);
 
-    ssize_t nread = ::read(fd_, in_buf_.writable_data(), MAX_READ_BATCH_BYTES);
+    ssize_t nread = sock_read(fd_, in_buf_.writable_data(), MAX_READ_BATCH_BYTES);
 
     if (nread > 0) {
         in_buf_.produce(static_cast<size_t>(nread));
@@ -132,7 +167,7 @@ void Connection::handle_write() {
     }
 
     size_t to_write = std::min(out_buf_.readable_bytes(), MAX_WRITE_BATCH_BYTES);
-    ssize_t nwritten = ::write(fd_, out_buf_.readable_data(), to_write);
+    ssize_t nwritten = sock_write(fd_, out_buf_.readable_data(), to_write);
 
     if (nwritten > 0) {
         out_buf_.consume(static_cast<size_t>(nwritten));

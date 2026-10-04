@@ -3,7 +3,27 @@
 
 #include <algorithm>
 #include <cstring>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOGDI
+#define NOGDI
+#endif
+#include <windows.h>
+#ifdef ERROR
+#undef ERROR
+#endif
+static inline int epoll_create1(int) { return 1; }
+static inline int epoll_ctl(int, int, int, struct epoll_event *) { return 0; }
+static inline int epoll_wait(int, struct epoll_event *, int, int timeout) {
+    if (timeout > 0) ::Sleep(static_cast<DWORD>(timeout));
+    return 0;
+}
+#else
 #include <unistd.h>
+#endif
 
 namespace redisx::net {
 
