@@ -9,39 +9,54 @@
 #include "redisx/proto/resp_reader.h"
 #include "redisx/proto/resp_writer.h"
 
-#include <arpa/inet.h>
 #include <gtest/gtest.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define read_sock(fd, buf, len) ::recv(static_cast<SOCKET>(fd), static_cast<char*>(buf), static_cast<int>(len), 0)
+#define write_sock(fd, buf, len) ::send(static_cast<SOCKET>(fd), reinterpret_cast<const char*>(buf), static_cast<int>(len), 0)
+#define close_sock(fd) ::closesocket(static_cast<SOCKET>(fd))
+using socket_ssize_t = int;
+#else
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <unistd.h>
+#define read_sock(fd, buf, len) ::read(fd, buf, len)
+#define write_sock(fd, buf, len) ::write(fd, buf, len)
+#define close_sock(fd) ::close(fd)
+using socket_ssize_t = ssize_t;
+#endif
 
 #include <chrono>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <thread>
+#include <vector>
 
-using namespace redisx::net;
-using namespace redisx::proto;
-using namespace redisx::commands;
-using namespace redisx::db;
+using namespace redisx;
 
-class StorageIntegrationTest : public ::testing::Test {
+class StorageServerIntegrationTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        register_expire_commands(dispatcher_, ttl_mgr_);
-        register_string_commands(dispatcher_, ttl_mgr_);
+        server_loop_ = std::make_unique<net::EventLoop>();
+        listener_ = std::make_unique<net::Listener>(*server_loop_, "127.0.0.1", port_);
 
-        server_loop_ = std::make_unique<EventLoop>();
-        listener_ = std::make_unique<Listener>(*server_loop_, "127.0.0.1", port_);
+        commands::register_string_commands(dispatcher_, ttl_mgr_);
+        commands::register_expire_commands(dispatcher_, ttl_mgr_);
 
-        listener_->set_new_connection_callback([this](std::shared_ptr<Connection> conn) {
+        listener_->set_new_connection_callback([this](std::shared_ptr<net::Connection> conn) {
             auto &in_buf = conn->in_buffer();
             auto &out_buf = conn->out_buffer();
 
+            std::size_t active_db = 0;
+
             while (in_buf.readable_bytes() > 0) {
-                auto result = RespReader::parse(in_buf);
+                auto result = proto::RespReader::parse(in_buf);
                 if (result.is_error()) {
-                    RespWriter::write_error(out_buf, "ERR Protocol error");
+                    proto::RespWriter::write_error(out_buf, "ERR Protocol error");
                     conn->close();
                     break;
                 }
@@ -50,15 +65,15 @@ class StorageIntegrationTest : public ::testing::Test {
                 }
 
                 const auto &cmd = result.value().value();
-                std::size_t conn_db_idx = active_db_idx_;
-
-                dispatcher_.dispatch(cmd, keyspace_, conn_db_idx, out_buf, conn_db_idx);
-                active_db_idx_ = conn_db_idx;
+                std::size_t out_db = active_db;
+                dispatcher_.dispatch(cmd, keyspace_, active_db, out_buf, out_db, nullptr, &ttl_mgr_);
+                active_db = out_db;
             }
             conn->flush();
         });
 
         ASSERT_TRUE(listener_->start().has_value());
+
         server_thread_ = std::thread([this]() { server_loop_->run(); });
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -75,17 +90,16 @@ class StorageIntegrationTest : public ::testing::Test {
     }
 
     std::uint16_t port_{6482};
-    std::unique_ptr<EventLoop> server_loop_;
-    std::unique_ptr<Listener> listener_;
+    std::unique_ptr<net::EventLoop> server_loop_;
+    std::unique_ptr<net::Listener> listener_;
+    db::Keyspace keyspace_;
+    db::TTLManager ttl_mgr_;
+    commands::Dispatcher dispatcher_;
     std::thread server_thread_;
-    TTLManager ttl_mgr_;
-    Dispatcher dispatcher_;
-    Keyspace keyspace_;
-    std::size_t active_db_idx_{0};
 };
 
-TEST_F(StorageIntegrationTest, EndToEndSetGetIncr) {
-    int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+TEST_F(StorageServerIntegrationTest, BasicStorageOperationsOverRESP) {
+    int sock = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
     ASSERT_GE(sock, 0);
 
     struct sockaddr_in addr {};
@@ -93,16 +107,20 @@ TEST_F(StorageIntegrationTest, EndToEndSetGetIncr) {
     addr.sin_port = htons(port_);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
+#ifdef _WIN32
+    ASSERT_EQ(::connect(static_cast<SOCKET>(sock), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#else
     ASSERT_EQ(::connect(sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#endif
 
     auto send_cmd = [sock](std::string_view req) {
-        ssize_t nwritten = ::write(sock, req.data(), req.size());
-        EXPECT_EQ(nwritten, static_cast<ssize_t>(req.size()));
+        socket_ssize_t nwritten = write_sock(sock, req.data(), req.size());
+        EXPECT_EQ(nwritten, static_cast<socket_ssize_t>(req.size()));
     };
 
     auto recv_resp = [sock]() {
         char buf[256] = {0};
-        ssize_t nread = ::read(sock, buf, sizeof(buf) - 1);
+        socket_ssize_t nread = read_sock(sock, buf, sizeof(buf) - 1);
         EXPECT_GT(nread, 0);
         return std::string(buf, static_cast<size_t>(nread));
     };
@@ -141,5 +159,5 @@ TEST_F(StorageIntegrationTest, EndToEndSetGetIncr) {
     send_cmd("*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n");
     EXPECT_EQ(recv_resp(), "$-1\r\n");
 
-    ::close(sock);
+    close_sock(sock);
 }

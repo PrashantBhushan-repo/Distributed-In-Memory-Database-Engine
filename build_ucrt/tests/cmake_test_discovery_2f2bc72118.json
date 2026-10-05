@@ -1,0 +1,92 @@
+{
+  "tests": 10,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ReplicationIntegrationTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "PrimaryReplicaStateConsistencyAndPartialResync",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\replication_test.cpp",
+          "line": 18
+        }
+      ]
+    },
+    {
+      "name": "CrashTest",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "TruncatedAofRecovery",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\crash_test.cpp",
+          "line": 30
+        },
+        {
+          "name": "CorruptedRdbRefusesStartup",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\crash_test.cpp",
+          "line": 57
+        }
+      ]
+    },
+    {
+      "name": "EvictionTest",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "NoEvictionReturnsOOM",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\eviction_test.cpp",
+          "line": 12
+        },
+        {
+          "name": "SampledLRUEviction",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\eviction_test.cpp",
+          "line": 41
+        }
+      ]
+    },
+    {
+      "name": "StorageServerIntegrationTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "BasicStorageOperationsOverRESP",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\storage_test.cpp",
+          "line": 101
+        }
+      ]
+    },
+    {
+      "name": "RespServerIntegrationTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "PingAndEchoRESP",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\resp_test.cpp",
+          "line": 114
+        }
+      ]
+    },
+    {
+      "name": "EchoServerIntegrationTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "SingleConnectionEcho",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\echo_test.cpp",
+          "line": 72
+        },
+        {
+          "name": "ConcurrentClientsEcho",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\echo_test.cpp",
+          "line": 99
+        },
+        {
+          "name": "MaxClientsEnforcement",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\integration\\echo_test.cpp",
+          "line": 137
+        }
+      ]
+    }
+  ]
+}

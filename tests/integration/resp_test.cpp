@@ -4,10 +4,25 @@
 #include "redisx/proto/resp_reader.h"
 #include "redisx/proto/resp_writer.h"
 
-#include <arpa/inet.h>
 #include <gtest/gtest.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define read_sock(fd, buf, len) ::recv(static_cast<SOCKET>(fd), static_cast<char*>(buf), static_cast<int>(len), 0)
+#define write_sock(fd, buf, len) ::send(static_cast<SOCKET>(fd), reinterpret_cast<const char*>(buf), static_cast<int>(len), 0)
+#define close_sock(fd) ::closesocket(static_cast<SOCKET>(fd))
+using socket_ssize_t = int;
+#else
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <unistd.h>
+#define read_sock(fd, buf, len) ::read(fd, buf, len)
+#define write_sock(fd, buf, len) ::write(fd, buf, len)
+#define close_sock(fd) ::close(fd)
+using socket_ssize_t = ssize_t;
+#endif
 
 #include <chrono>
 #include <cstring>
@@ -97,7 +112,7 @@ class RespServerIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(RespServerIntegrationTest, PingAndEchoRESP) {
-    int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    int sock = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
     ASSERT_GE(sock, 0);
 
     struct sockaddr_in addr {};
@@ -105,38 +120,42 @@ TEST_F(RespServerIntegrationTest, PingAndEchoRESP) {
     addr.sin_port = htons(port_);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
+#ifdef _WIN32
+    ASSERT_EQ(::connect(static_cast<SOCKET>(sock), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#else
     ASSERT_EQ(::connect(sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#endif
 
     // 1. Send RESP PING
     std::string ping_req = "*1\r\n$4\r\nPING\r\n";
-    ssize_t nwritten = ::write(sock, ping_req.data(), ping_req.size());
-    ASSERT_EQ(nwritten, static_cast<ssize_t>(ping_req.size()));
+    socket_ssize_t nwritten = write_sock(sock, ping_req.data(), ping_req.size());
+    ASSERT_EQ(nwritten, static_cast<socket_ssize_t>(ping_req.size()));
 
     char buf[128] = {0};
-    ssize_t nread = ::read(sock, buf, sizeof(buf) - 1);
+    socket_ssize_t nread = read_sock(sock, buf, sizeof(buf) - 1);
     ASSERT_GT(nread, 0);
     EXPECT_EQ(std::string(buf, static_cast<size_t>(nread)), "+PONG\r\n");
 
     // 2. Send Inline ECHO
     std::string echo_req = "ECHO \"Hello RedisX\"\r\n";
-    nwritten = ::write(sock, echo_req.data(), echo_req.size());
-    ASSERT_EQ(nwritten, static_cast<ssize_t>(echo_req.size()));
+    nwritten = write_sock(sock, echo_req.data(), echo_req.size());
+    ASSERT_EQ(nwritten, static_cast<socket_ssize_t>(echo_req.size()));
 
     std::memset(buf, 0, sizeof(buf));
-    nread = ::read(sock, buf, sizeof(buf) - 1);
+    nread = read_sock(sock, buf, sizeof(buf) - 1);
     ASSERT_GT(nread, 0);
     EXPECT_EQ(std::string(buf, static_cast<size_t>(nread)), "$12\r\nHello RedisX\r\n");
 
     // 3. Send Unknown Command
     std::string unknown_req = "*2\r\n$3\r\nFOO\r\n$3\r\nbar\r\n";
-    nwritten = ::write(sock, unknown_req.data(), unknown_req.size());
-    ASSERT_EQ(nwritten, static_cast<ssize_t>(unknown_req.size()));
+    nwritten = write_sock(sock, unknown_req.data(), unknown_req.size());
+    ASSERT_EQ(nwritten, static_cast<socket_ssize_t>(unknown_req.size()));
 
     std::memset(buf, 0, sizeof(buf));
-    nread = ::read(sock, buf, sizeof(buf) - 1);
+    nread = read_sock(sock, buf, sizeof(buf) - 1);
     ASSERT_GT(nread, 0);
     EXPECT_EQ(std::string(buf, static_cast<size_t>(nread)),
               "-ERR unknown command 'FOO', with args: 'bar'\r\n");
 
-    ::close(sock);
+    close_sock(sock);
 }

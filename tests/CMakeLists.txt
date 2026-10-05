@@ -28,6 +28,7 @@ add_executable(unit_tests
     unit/skiplist_test.cpp
     unit/encoding_test.cpp
     unit/persistence_test.cpp
+    unit/replication_test.cpp
 )
 
 target_link_libraries(unit_tests
@@ -39,6 +40,7 @@ target_link_libraries(unit_tests
         redisx_types
         redisx_memory
         redisx_persistence
+        redisx_replication
         gtest_main
 )
 
@@ -57,6 +59,7 @@ add_executable(integration_tests
     integration/storage_test.cpp
     integration/eviction_test.cpp
     integration/crash_test.cpp
+    integration/replication_test.cpp
 )
 
 target_link_libraries(integration_tests
@@ -68,6 +71,7 @@ target_link_libraries(integration_tests
         redisx_types
         redisx_memory
         redisx_persistence
+        redisx_replication
         gtest_main
 )
 
