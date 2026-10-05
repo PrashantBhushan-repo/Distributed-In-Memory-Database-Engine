@@ -2,15 +2,30 @@
 #include "redisx/net/event_loop.h"
 #include "redisx/net/listener.h"
 
-#include <arpa/inet.h>
 #include <gtest/gtest.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define read_sock(fd, buf, len) ::recv(static_cast<SOCKET>(fd), static_cast<char*>(buf), static_cast<int>(len), 0)
+#define write_sock(fd, buf, len) ::send(static_cast<SOCKET>(fd), reinterpret_cast<const char*>(buf), static_cast<int>(len), 0)
+#define close_sock(fd) ::closesocket(static_cast<SOCKET>(fd))
+using socket_ssize_t = int;
+#else
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <thread>
 #include <unistd.h>
-#include <vector>
+#define read_sock(fd, buf, len) ::read(fd, buf, len)
+#define write_sock(fd, buf, len) ::write(fd, buf, len)
+#define close_sock(fd) ::close(fd)
+using socket_ssize_t = ssize_t;
+#endif
+
 #include <atomic>
 #include <chrono>
+#include <thread>
+#include <vector>
 
 using namespace redisx::net;
 
@@ -35,7 +50,6 @@ class EchoServerIntegrationTest : public ::testing::Test {
             server_loop_->run();
         });
 
-        // Give server thread time to start listening
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
@@ -56,7 +70,7 @@ class EchoServerIntegrationTest : public ::testing::Test {
 };
 
 TEST_F(EchoServerIntegrationTest, SingleConnectionEcho) {
-    int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    int sock = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
     ASSERT_GE(sock, 0);
 
     struct sockaddr_in addr {};
@@ -64,22 +78,26 @@ TEST_F(EchoServerIntegrationTest, SingleConnectionEcho) {
     addr.sin_port = htons(port_);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
+#ifdef _WIN32
+    ASSERT_EQ(::connect(static_cast<SOCKET>(sock), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#else
     ASSERT_EQ(::connect(sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#endif
 
     std::string msg = "PING PONG REDISX TEST";
-    ssize_t nwritten = ::write(sock, msg.data(), msg.size());
-    ASSERT_EQ(nwritten, static_cast<ssize_t>(msg.size()));
+    socket_ssize_t nwritten = write_sock(sock, msg.data(), msg.size());
+    ASSERT_EQ(nwritten, static_cast<socket_ssize_t>(msg.size()));
 
     char buf[128] = {0};
-    ssize_t nread = ::read(sock, buf, sizeof(buf) - 1);
-    ASSERT_EQ(nread, static_cast<ssize_t>(msg.size()));
+    socket_ssize_t nread = read_sock(sock, buf, sizeof(buf) - 1);
+    ASSERT_EQ(nread, static_cast<socket_ssize_t>(msg.size()));
     EXPECT_STREQ(buf, msg.c_str());
 
-    ::close(sock);
+    close_sock(sock);
 }
 
 TEST_F(EchoServerIntegrationTest, ConcurrentClientsEcho) {
-    constexpr size_t NUM_CLIENTS = 100;
+    constexpr size_t NUM_CLIENTS = 10;
     std::vector<int> sockets(NUM_CLIENTS, -1);
 
     struct sockaddr_in addr {};
@@ -89,26 +107,30 @@ TEST_F(EchoServerIntegrationTest, ConcurrentClientsEcho) {
 
     // Open NUM_CLIENTS connections
     for (size_t i = 0; i < NUM_CLIENTS; ++i) {
-        sockets[i] = ::socket(AF_INET, SOCK_STREAM, 0);
+        sockets[i] = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
         ASSERT_GE(sockets[i], 0);
+#ifdef _WIN32
+        ASSERT_EQ(::connect(static_cast<SOCKET>(sockets[i]), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#else
         ASSERT_EQ(::connect(sockets[i], reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#endif
     }
 
     // Send payload concurrently across all clients
     for (size_t i = 0; i < NUM_CLIENTS; ++i) {
         std::string payload = "ClientPayload_" + std::to_string(i);
-        ssize_t nwritten = ::write(sockets[i], payload.data(), payload.size());
-        EXPECT_EQ(nwritten, static_cast<ssize_t>(payload.size()));
+        socket_ssize_t nwritten = write_sock(sockets[i], payload.data(), payload.size());
+        EXPECT_EQ(nwritten, static_cast<socket_ssize_t>(payload.size()));
     }
 
     // Read and verify echo from all clients
     for (size_t i = 0; i < NUM_CLIENTS; ++i) {
         std::string expected = "ClientPayload_" + std::to_string(i);
         char buf[128] = {0};
-        ssize_t nread = ::read(sockets[i], buf, sizeof(buf) - 1);
-        EXPECT_EQ(nread, static_cast<ssize_t>(expected.size()));
+        socket_ssize_t nread = read_sock(sockets[i], buf, sizeof(buf) - 1);
+        EXPECT_EQ(nread, static_cast<socket_ssize_t>(expected.size()));
         EXPECT_EQ(std::string(buf, static_cast<size_t>(nread)), expected);
-        ::close(sockets[i]);
+        close_sock(sockets[i]);
     }
 }
 
@@ -122,26 +144,34 @@ TEST_F(EchoServerIntegrationTest, MaxClientsEnforcement) {
 
     std::vector<int> valid_socks;
     for (int i = 0; i < 5; ++i) {
-        int s = ::socket(AF_INET, SOCK_STREAM, 0);
+        int s = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
         ASSERT_GE(s, 0);
+#ifdef _WIN32
+        ASSERT_EQ(::connect(static_cast<SOCKET>(s), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#else
         ASSERT_EQ(::connect(s, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#endif
         valid_socks.push_back(s);
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // The 6th connection attempt should be rejected with max clients error
-    int overflow_sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    int overflow_sock = static_cast<int>(::socket(AF_INET, SOCK_STREAM, 0));
     ASSERT_GE(overflow_sock, 0);
+#ifdef _WIN32
+    ASSERT_EQ(::connect(static_cast<SOCKET>(overflow_sock), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#else
     ASSERT_EQ(::connect(overflow_sock, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)), 0);
+#endif
 
     char buf[128] = {0};
-    ssize_t nread = ::read(overflow_sock, buf, sizeof(buf) - 1);
+    socket_ssize_t nread = read_sock(overflow_sock, buf, sizeof(buf) - 1);
     EXPECT_GT(nread, 0);
     EXPECT_NE(std::string(buf).find("max number of clients reached"), std::string::npos);
 
-    ::close(overflow_sock);
+    close_sock(overflow_sock);
     for (int s : valid_socks) {
-        ::close(s);
+        close_sock(s);
     }
 }

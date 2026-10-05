@@ -169,6 +169,7 @@ add_library(redisx_commands
     src/commands/zset_cmds.cpp
     src/commands/memory_cmds.cpp
     src/commands/persist_cmds.cpp
+    src/commands/repl_cmds.cpp
 )
 
 target_include_directories(redisx_commands
@@ -183,10 +184,43 @@ target_link_libraries(redisx_commands
         redisx_db
         redisx_types
         redisx_memory
+        redisx_replication
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx_commands PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Replication Library
+# ------------------------------------------------------------
+add_library(redisx_replication
+    src/replication/replid.cpp
+    src/replication/backlog.cpp
+    src/replication/repl_stream.cpp
+    src/replication/replica_link.cpp
+)
+
+target_include_directories(redisx_replication
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_replication
+    PUBLIC
+        redisx_core
+        redisx_proto
+        redisx_db
+        redisx_types
+        redisx_net
+)
+
+if (WIN32)
+    target_link_libraries(redisx_replication PUBLIC ws2_32)
+endif()
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_replication PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
 # ------------------------------------------------------------
@@ -241,6 +275,7 @@ target_link_libraries(redisx_net
         redisx_types
         redisx_memory
         redisx_persistence
+        redisx_replication
 )
 
 if (WIN32)
@@ -286,6 +321,7 @@ target_link_libraries(redisx
         redisx_types
         redisx_memory
         redisx_persistence
+        redisx_replication
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")

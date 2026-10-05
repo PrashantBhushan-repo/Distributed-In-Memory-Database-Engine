@@ -153,10 +153,18 @@ void Connection::handle_read() {
         // EOF from client
         close();
     } else {
+#ifdef _WIN32
+        int err = WSAGetLastError();
+        if (err != WSAEWOULDBLOCK && err != WSAEINPROGRESS && err != WSAEINTR) {
+            REDISX_LOG_DEBUG("read error on fd %d: %d", fd_, err);
+            close();
+        }
+#else
         if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
             REDISX_LOG_DEBUG("read error on fd %d: %s", fd_, std::strerror(errno));
             close();
         }
+#endif
     }
 }
 
@@ -172,11 +180,20 @@ void Connection::handle_write() {
     if (nwritten > 0) {
         out_buf_.consume(static_cast<size_t>(nwritten));
     } else if (nwritten < 0) {
+#ifdef _WIN32
+        int err = WSAGetLastError();
+        if (err != WSAEWOULDBLOCK && err != WSAEINPROGRESS && err != WSAEINTR) {
+            REDISX_LOG_DEBUG("write error on fd %d: %d", fd_, err);
+            close();
+            return;
+        }
+#else
         if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
             REDISX_LOG_DEBUG("write error on fd %d: %s", fd_, std::strerror(errno));
             close();
             return;
         }
+#endif
     }
 
     update_epoll_events();

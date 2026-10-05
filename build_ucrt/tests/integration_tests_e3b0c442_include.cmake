@@ -1,0 +1,5 @@
+if(EXISTS "C:/Users/prash/OneDrive/Desktop/pbRedisDB/build_ucrt/tests/integration_tests_e3b0c442_tests.cmake")
+  include("C:/Users/prash/OneDrive/Desktop/pbRedisDB/build_ucrt/tests/integration_tests_e3b0c442_tests.cmake")
+else()
+  add_test(integration_tests_NOT_BUILT integration_tests_NOT_BUILT)
+endif()

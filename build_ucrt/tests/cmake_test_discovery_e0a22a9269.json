@@ -1,0 +1,289 @@
+{
+  "tests": 41,
+  "name": "AllTests",
+  "testsuites": [
+    {
+      "name": "ReplicationUnitTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "ReplIdManagerBasic",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\replication_test.cpp",
+          "line": 8
+        },
+        {
+          "name": "BacklogCircularWriteAndPartialResync",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\replication_test.cpp",
+          "line": 24
+        },
+        {
+          "name": "DeterministicCommandRewriting",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\replication_test.cpp",
+          "line": 56
+        }
+      ]
+    },
+    {
+      "name": "PersistenceTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "RdbRoundtripAllTypes",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\persistence_test.cpp",
+          "line": 34
+        },
+        {
+          "name": "RdbCrcMismatchDetection",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\persistence_test.cpp",
+          "line": 96
+        },
+        {
+          "name": "AofRewriteAndRecovery",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\persistence_test.cpp",
+          "line": 115
+        }
+      ]
+    },
+    {
+      "name": "EncodingTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "ListpackToQuicklistPromotion",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\encoding_test.cpp",
+          "line": 4
+        },
+        {
+          "name": "IntsetToHashtablePromotion",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\encoding_test.cpp",
+          "line": 21
+        },
+        {
+          "name": "ZSetListpackToSkiplistPromotion",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\encoding_test.cpp",
+          "line": 40
+        }
+      ]
+    },
+    {
+      "name": "SkiplistTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "BasicInsertAndScore",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\skiplist_test.cpp",
+          "line": 4
+        },
+        {
+          "name": "RankAndRange",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\skiplist_test.cpp",
+          "line": 19
+        },
+        {
+          "name": "RemoveMember",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\skiplist_test.cpp",
+          "line": 35
+        }
+      ]
+    },
+    {
+      "name": "TTLTest",
+      "tests": 6,
+      "testsuite": [
+        {
+          "name": "LazyExpirationBasic",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\ttl_test.cpp",
+          "line": 39
+        },
+        {
+          "name": "ExpireAndTTLCommands",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\ttl_test.cpp",
+          "line": 60
+        },
+        {
+          "name": "ExpireOptionsNX_XX_GT_LT",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\ttl_test.cpp",
+          "line": 93
+        },
+        {
+          "name": "SetCommandTTLOptions",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\ttl_test.cpp",
+          "line": 129
+        },
+        {
+          "name": "ActiveExpireCycle",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\ttl_test.cpp",
+          "line": 157
+        },
+        {
+          "name": "ReplicaModeBehavior",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\ttl_test.cpp",
+          "line": 182
+        }
+      ]
+    },
+    {
+      "name": "KeyspaceTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "MultiDatabaseIsolation",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\keyspace_test.cpp",
+          "line": 7
+        }
+      ]
+    },
+    {
+      "name": "RehashTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "ScanReverseBinaryCursorAcrossRehash",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\rehash_test.cpp",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "name": "DictTest",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "BasicOperations",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\dict_test.cpp",
+          "line": 9
+        },
+        {
+          "name": "OneMillionInsertsWithForcedResize",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\dict_test.cpp",
+          "line": 38
+        }
+      ]
+    },
+    {
+      "name": "RespWriterTest",
+      "tests": 6,
+      "testsuite": [
+        {
+          "name": "WriteSimpleString",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_writer_test.cpp",
+          "line": 10
+        },
+        {
+          "name": "WriteError",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_writer_test.cpp",
+          "line": 17
+        },
+        {
+          "name": "WriteInteger",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_writer_test.cpp",
+          "line": 24
+        },
+        {
+          "name": "WriteBulkString",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_writer_test.cpp",
+          "line": 31
+        },
+        {
+          "name": "WriteNullBulkAndArray",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_writer_test.cpp",
+          "line": 38
+        },
+        {
+          "name": "WriteStringArray",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_writer_test.cpp",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "name": "RespReaderTest",
+      "tests": 5,
+      "testsuite": [
+        {
+          "name": "ParseMultibulkCommand",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_reader_test.cpp",
+          "line": 11
+        },
+        {
+          "name": "ParseInlineCommand",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_reader_test.cpp",
+          "line": 28
+        },
+        {
+          "name": "ByteAtATimeStreaming",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_reader_test.cpp",
+          "line": 46
+        },
+        {
+          "name": "PipelinedCommands",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_reader_test.cpp",
+          "line": 69
+        },
+        {
+          "name": "MalformedInputsReturnProtocolError",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\resp_reader_test.cpp",
+          "line": 88
+        }
+      ]
+    },
+    {
+      "name": "EventLoopTest",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "TimerExpiration",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\event_loop_test.cpp",
+          "line": 10
+        },
+        {
+          "name": "CancelTimer",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\event_loop_test.cpp",
+          "line": 28
+        }
+      ]
+    },
+    {
+      "name": "TimeTest",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "SystemTimeProviderBasic",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\time_test.cpp",
+          "line": 8
+        },
+        {
+          "name": "MockTimeProviderAdvancement",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\time_test.cpp",
+          "line": 17
+        }
+      ]
+    },
+    {
+      "name": "BufferTest",
+      "tests": 4,
+      "testsuite": [
+        {
+          "name": "BasicAppendAndConsume",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\buffer_test.cpp",
+          "line": 9
+        },
+        {
+          "name": "ReserveAndExpansion",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\buffer_test.cpp",
+          "line": 29
+        },
+        {
+          "name": "AutomaticCompaction",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\buffer_test.cpp",
+          "line": 39
+        },
+        {
+          "name": "ClearResetsCursors",
+          "file": "C:\\Users\\prash\\OneDrive\\Desktop\\pbRedisDB\\tests\\unit\\buffer_test.cpp",
+          "line": 60
+        }
+      ]
+    }
+  ]
+}

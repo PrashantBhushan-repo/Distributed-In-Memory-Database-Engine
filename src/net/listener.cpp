@@ -13,6 +13,14 @@
 #undef ERROR
 #endif
 
+struct WSAInit {
+    WSAInit() {
+        WSADATA wsa;
+        WSAStartup(MAKEWORD(2, 2), &wsa);
+    }
+};
+static WSAInit g_wsa_init;
+
 static inline ssize_t sock_write(int fd, const void *buf, size_t len) {
     return ::send(static_cast<SOCKET>(fd), static_cast<const char *>(buf), static_cast<int>(len), 0);
 }

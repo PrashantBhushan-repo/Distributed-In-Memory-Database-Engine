@@ -18,7 +18,8 @@
 static inline int epoll_create1(int) { return 1; }
 static inline int epoll_ctl(int, int, int, struct epoll_event *) { return 0; }
 static inline int epoll_wait(int, struct epoll_event *, int, int timeout) {
-    if (timeout > 0) ::Sleep(static_cast<DWORD>(timeout));
+    int wait_ms = (timeout < 0 || timeout > 10) ? 10 : timeout;
+    if (wait_ms > 0) ::Sleep(static_cast<DWORD>(wait_ms));
     return 0;
 }
 #else
