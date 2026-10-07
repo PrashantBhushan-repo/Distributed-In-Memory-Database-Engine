@@ -1,5 +1,5 @@
 {
-  "tests": 10,
+  "tests": 12,
   "name": "AllTests",
   "testsuites": [
     {
@@ -85,6 +85,22 @@
           "name": "PrimaryReplicaStateConsistencyAndPartialResync",
           "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/replication_test.cpp",
           "line": 18
+        }
+      ]
+    },
+    {
+      "name": "Stage9IntegrationTest",
+      "tests": 2,
+      "testsuite": [
+        {
+          "name": "WatchExecRaceWithSecondClient",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/tx_test.cpp",
+          "line": 33
+        },
+        {
+          "name": "PubSubPublishAndSubscribe",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/tx_test.cpp",
+          "line": 54
         }
       ]
     }
