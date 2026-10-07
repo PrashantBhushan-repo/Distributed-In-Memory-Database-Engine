@@ -170,6 +170,11 @@ add_library(redisx_commands
     src/commands/memory_cmds.cpp
     src/commands/persist_cmds.cpp
     src/commands/repl_cmds.cpp
+    src/commands/blocking.cpp
+    src/tx/watch.cpp
+    src/tx/transaction.cpp
+    src/pubsub/pubsub.cpp
+    src/pubsub/keyspace_notify.cpp
 )
 
 target_include_directories(redisx_commands

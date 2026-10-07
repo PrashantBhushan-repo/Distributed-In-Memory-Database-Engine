@@ -60,6 +60,7 @@ add_executable(integration_tests
     integration/eviction_test.cpp
     integration/crash_test.cpp
     integration/replication_test.cpp
+    integration/tx_test.cpp
 )
 
 target_link_libraries(integration_tests

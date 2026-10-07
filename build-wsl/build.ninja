@@ -393,6 +393,46 @@ build CMakeFiles/redisx_commands.dir/src/commands/repl_cmds.cpp.o: CXX_COMPILER_
   OBJECT_FILE_DIR = CMakeFiles/redisx_commands.dir/src/commands
   TARGET_SUPPORT_DIR = CMakeFiles/redisx_commands.dir
 
+build CMakeFiles/redisx_commands.dir/src/commands/blocking.cpp.o: CXX_COMPILER__redisx_commands_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/commands/blocking.cpp || cmake_object_order_depends_target_redisx_commands
+  DEP_FILE = CMakeFiles/redisx_commands.dir/src/commands/blocking.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include
+  OBJECT_DIR = CMakeFiles/redisx_commands.dir
+  OBJECT_FILE_DIR = CMakeFiles/redisx_commands.dir/src/commands
+  TARGET_SUPPORT_DIR = CMakeFiles/redisx_commands.dir
+
+build CMakeFiles/redisx_commands.dir/src/tx/watch.cpp.o: CXX_COMPILER__redisx_commands_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/tx/watch.cpp || cmake_object_order_depends_target_redisx_commands
+  DEP_FILE = CMakeFiles/redisx_commands.dir/src/tx/watch.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include
+  OBJECT_DIR = CMakeFiles/redisx_commands.dir
+  OBJECT_FILE_DIR = CMakeFiles/redisx_commands.dir/src/tx
+  TARGET_SUPPORT_DIR = CMakeFiles/redisx_commands.dir
+
+build CMakeFiles/redisx_commands.dir/src/tx/transaction.cpp.o: CXX_COMPILER__redisx_commands_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/tx/transaction.cpp || cmake_object_order_depends_target_redisx_commands
+  DEP_FILE = CMakeFiles/redisx_commands.dir/src/tx/transaction.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include
+  OBJECT_DIR = CMakeFiles/redisx_commands.dir
+  OBJECT_FILE_DIR = CMakeFiles/redisx_commands.dir/src/tx
+  TARGET_SUPPORT_DIR = CMakeFiles/redisx_commands.dir
+
+build CMakeFiles/redisx_commands.dir/src/pubsub/pubsub.cpp.o: CXX_COMPILER__redisx_commands_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/pubsub/pubsub.cpp || cmake_object_order_depends_target_redisx_commands
+  DEP_FILE = CMakeFiles/redisx_commands.dir/src/pubsub/pubsub.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include
+  OBJECT_DIR = CMakeFiles/redisx_commands.dir
+  OBJECT_FILE_DIR = CMakeFiles/redisx_commands.dir/src/pubsub
+  TARGET_SUPPORT_DIR = CMakeFiles/redisx_commands.dir
+
+build CMakeFiles/redisx_commands.dir/src/pubsub/keyspace_notify.cpp.o: CXX_COMPILER__redisx_commands_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/pubsub/keyspace_notify.cpp || cmake_object_order_depends_target_redisx_commands
+  DEP_FILE = CMakeFiles/redisx_commands.dir/src/pubsub/keyspace_notify.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include
+  OBJECT_DIR = CMakeFiles/redisx_commands.dir
+  OBJECT_FILE_DIR = CMakeFiles/redisx_commands.dir/src/pubsub
+  TARGET_SUPPORT_DIR = CMakeFiles/redisx_commands.dir
+
 
 # =============================================================================
 # Link build statements for STATIC_LIBRARY target redisx_commands
@@ -401,7 +441,7 @@ build CMakeFiles/redisx_commands.dir/src/commands/repl_cmds.cpp.o: CXX_COMPILER_
 #############################################
 # Link the static library libredisx_commands.a
 
-build libredisx_commands.a: CXX_STATIC_LIBRARY_LINKER__redisx_commands_ CMakeFiles/redisx_commands.dir/src/commands/dispatcher.cpp.o CMakeFiles/redisx_commands.dir/src/commands/expire_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/string_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/list_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/hash_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/set_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/zset_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/memory_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/persist_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/repl_cmds.cpp.o || libredisx_replication.a
+build libredisx_commands.a: CXX_STATIC_LIBRARY_LINKER__redisx_commands_ CMakeFiles/redisx_commands.dir/src/commands/dispatcher.cpp.o CMakeFiles/redisx_commands.dir/src/commands/expire_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/string_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/list_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/hash_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/set_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/zset_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/memory_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/persist_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/repl_cmds.cpp.o CMakeFiles/redisx_commands.dir/src/commands/blocking.cpp.o CMakeFiles/redisx_commands.dir/src/tx/watch.cpp.o CMakeFiles/redisx_commands.dir/src/tx/transaction.cpp.o CMakeFiles/redisx_commands.dir/src/pubsub/pubsub.cpp.o CMakeFiles/redisx_commands.dir/src/pubsub/keyspace_notify.cpp.o || libredisx_replication.a
   OBJECT_DIR = CMakeFiles/redisx_commands.dir
   POST_BUILD = :
   PRE_LINK = :
@@ -924,6 +964,14 @@ build tests/CMakeFiles/integration_tests.dir/integration/replication_test.cpp.o:
   OBJECT_FILE_DIR = tests/CMakeFiles/integration_tests.dir/integration
   TARGET_SUPPORT_DIR = tests/CMakeFiles/integration_tests.dir
 
+build tests/CMakeFiles/integration_tests.dir/integration/tx_test.cpp.o: CXX_COMPILER__integration_tests_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/tests/integration/tx_test.cpp || cmake_object_order_depends_target_integration_tests
+  DEP_FILE = tests/CMakeFiles/integration_tests.dir/integration/tx_test.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest
+  OBJECT_DIR = tests/CMakeFiles/integration_tests.dir
+  OBJECT_FILE_DIR = tests/CMakeFiles/integration_tests.dir/integration
+  TARGET_SUPPORT_DIR = tests/CMakeFiles/integration_tests.dir
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target integration_tests
@@ -932,7 +980,7 @@ build tests/CMakeFiles/integration_tests.dir/integration/replication_test.cpp.o:
 #############################################
 # Link the executable tests/integration_tests
 
-build tests/integration_tests tests/integration_tests[1]_tests.cmake | ${cmake_ninja_workdir}tests/integration_tests[1]_tests.cmake: CXX_EXECUTABLE_LINKER__integration_tests_ tests/CMakeFiles/integration_tests.dir/integration/echo_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/resp_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/storage_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/eviction_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/crash_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/replication_test.cpp.o | libredisx_net.a libredisx_proto.a libredisx_db.a libredisx_commands.a libredisx_types.a libredisx_memory.a libredisx_persistence.a libredisx_replication.a lib/libgtest_main.a libredisx_net.a libredisx_commands.a libredisx_persistence.a libredisx_replication.a libredisx_memory.a libredisx_proto.a libredisx_db.a libredisx_types.a libredisx_core.a lib/libgtest.a || lib/libgtest.a lib/libgtest_main.a libredisx_commands.a libredisx_core.a libredisx_db.a libredisx_memory.a libredisx_proto.a libredisx_types.a
+build tests/integration_tests tests/integration_tests[1]_tests.cmake | ${cmake_ninja_workdir}tests/integration_tests[1]_tests.cmake: CXX_EXECUTABLE_LINKER__integration_tests_ tests/CMakeFiles/integration_tests.dir/integration/echo_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/resp_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/storage_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/eviction_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/crash_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/replication_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/tx_test.cpp.o | libredisx_net.a libredisx_proto.a libredisx_db.a libredisx_commands.a libredisx_types.a libredisx_memory.a libredisx_persistence.a libredisx_replication.a lib/libgtest_main.a libredisx_net.a libredisx_commands.a libredisx_persistence.a libredisx_replication.a libredisx_memory.a libredisx_proto.a libredisx_db.a libredisx_types.a libredisx_core.a lib/libgtest.a || lib/libgtest.a lib/libgtest_main.a libredisx_commands.a libredisx_core.a libredisx_db.a libredisx_memory.a libredisx_proto.a libredisx_types.a
   DEP_FILE = tests/CMakeFiles/integration_tests.dir/link.d
   LINK_FLAGS = -Wl,--dependency-file=tests/CMakeFiles/integration_tests.dir/link.d
   LINK_LIBRARIES = libredisx_net.a  libredisx_proto.a  libredisx_db.a  libredisx_commands.a  libredisx_types.a  libredisx_memory.a  libredisx_persistence.a  libredisx_replication.a  lib/libgtest_main.a  libredisx_net.a  libredisx_commands.a  libredisx_persistence.a  libredisx_replication.a  libredisx_memory.a  libredisx_proto.a  libredisx_db.a  libredisx_types.a  libredisx_core.a  lib/libgtest.a
