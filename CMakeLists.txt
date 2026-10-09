@@ -171,6 +171,7 @@ add_library(redisx_commands
     src/commands/persist_cmds.cpp
     src/commands/repl_cmds.cpp
     src/commands/blocking.cpp
+    src/commands/admin_cmds.cpp
     src/tx/watch.cpp
     src/tx/transaction.cpp
     src/pubsub/pubsub.cpp
@@ -194,6 +195,84 @@ target_link_libraries(redisx_commands
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx_commands PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Configuration Library
+# ------------------------------------------------------------
+add_library(redisx_config
+    src/config/config.cpp
+)
+
+target_include_directories(redisx_config
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_config
+    PUBLIC
+        redisx_core
+        redisx_proto
+        redisx_commands
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_config PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Security Library
+# ------------------------------------------------------------
+add_library(redisx_security
+    src/security/auth.cpp
+    src/security/acl.cpp
+    src/security/tls.cpp
+)
+
+target_include_directories(redisx_security
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_security
+    PUBLIC
+        redisx_core
+        redisx_proto
+        redisx_commands
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_security PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+# ------------------------------------------------------------
+# Observability Library
+# ------------------------------------------------------------
+add_library(redisx_obs
+    src/obs/info.cpp
+    src/obs/slowlog.cpp
+    src/obs/latency.cpp
+    src/obs/metrics.cpp
+)
+
+target_include_directories(redisx_obs
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+target_link_libraries(redisx_obs
+    PUBLIC
+        redisx_core
+        redisx_proto
+        redisx_db
+        redisx_commands
+        redisx_config
+        redisx_memory
+        redisx_replication
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_obs PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
 # ------------------------------------------------------------
@@ -281,6 +360,9 @@ target_link_libraries(redisx_net
         redisx_memory
         redisx_persistence
         redisx_replication
+        redisx_config
+        redisx_security
+        redisx_obs
 )
 
 if (WIN32)
@@ -327,6 +409,9 @@ target_link_libraries(redisx
         redisx_memory
         redisx_persistence
         redisx_replication
+        redisx_config
+        redisx_security
+        redisx_obs
 )
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")

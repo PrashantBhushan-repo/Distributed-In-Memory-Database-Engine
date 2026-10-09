@@ -1,5 +1,6 @@
 #include "redisx/db/dict.h"
 #include "redisx/core/hash.h"
+#include "redisx/memory/accounting.h"
 
 #include <algorithm>
 #include <cstring>
@@ -71,6 +72,8 @@ void Dict::_free_table(DictTable &ht) {
         Entry *curr = ht.buckets[i];
         while (curr != nullptr) {
             Entry *next = curr->next;
+            std::size_t sz = sizeof(Entry) + curr->key.size() + (curr->value.is_string() ? curr->value.as_string().size() : 64);
+            memory::MemoryTracker::instance().free(sz);
             delete curr;
             curr = next;
         }
@@ -222,6 +225,13 @@ bool Dict::insert_or_assign(std::string key, Value val, std::uint64_t expire_at_
 
     Entry *existing = find(key);
     if (existing != nullptr) {
+        std::size_t old_sz = sizeof(Entry) + existing->key.size() + (existing->value.is_string() ? existing->value.as_string().size() : 64);
+        std::size_t new_sz = sizeof(Entry) + key.size() + (val.is_string() ? val.as_string().size() : 64);
+        if (new_sz > old_sz) {
+            memory::MemoryTracker::instance().alloc(new_sz - old_sz);
+        } else if (old_sz > new_sz) {
+            memory::MemoryTracker::instance().free(old_sz - new_sz);
+        }
         existing->value = std::move(val);
         existing->expire_at_ms = expire_at_ms;
         return false; // Updated existing key
@@ -231,6 +241,9 @@ bool Dict::insert_or_assign(std::string key, Value val, std::uint64_t expire_at_
 
     int target_idx = is_rehashing() ? 1 : 0;
     std::uint64_t h = core::hash_string(key) & ht_[target_idx].sizemask;
+
+    std::size_t entry_sz = sizeof(Entry) + key.size() + (val.is_string() ? val.as_string().size() : 64);
+    memory::MemoryTracker::instance().alloc(entry_sz);
 
     auto *new_entry = new Entry(std::move(key), std::move(val), expire_at_ms);
     new_entry->next = ht_[target_idx].buckets[h];
@@ -277,6 +290,8 @@ bool Dict::erase(std::string_view key) {
                 } else {
                     ht.buckets[idx] = curr->next;
                 }
+                std::size_t sz = sizeof(Entry) + curr->key.size() + (curr->value.is_string() ? curr->value.as_string().size() : 64);
+                memory::MemoryTracker::instance().free(sz);
                 delete curr;
                 ht.used--;
                 return true;

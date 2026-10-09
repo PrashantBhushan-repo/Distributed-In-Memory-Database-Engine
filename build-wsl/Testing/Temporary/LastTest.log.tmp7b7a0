@@ -1,0 +1,1110 @@
+Start testing: Oct 09 20:54 UTC
+----------------------------------------------------------
+1/60 Testing: BufferTest.BasicAppendAndConsume
+1/60 Test: BufferTest.BasicAppendAndConsume
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=BufferTest.BasicAppendAndConsume" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"BufferTest.BasicAppendAndConsume" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = BufferTest.BasicAppendAndConsume
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BufferTest
+[ RUN      ] BufferTest.BasicAppendAndConsume
+[       OK ] BufferTest.BasicAppendAndConsume (0 ms)
+[----------] 1 test from BufferTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"BufferTest.BasicAppendAndConsume" end time: Oct 09 20:54 UTC
+"BufferTest.BasicAppendAndConsume" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/60 Testing: BufferTest.ReserveAndExpansion
+2/60 Test: BufferTest.ReserveAndExpansion
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=BufferTest.ReserveAndExpansion" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"BufferTest.ReserveAndExpansion" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = BufferTest.ReserveAndExpansion
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BufferTest
+[ RUN      ] BufferTest.ReserveAndExpansion
+[       OK ] BufferTest.ReserveAndExpansion (0 ms)
+[----------] 1 test from BufferTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"BufferTest.ReserveAndExpansion" end time: Oct 09 20:54 UTC
+"BufferTest.ReserveAndExpansion" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/60 Testing: BufferTest.AutomaticCompaction
+3/60 Test: BufferTest.AutomaticCompaction
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=BufferTest.AutomaticCompaction" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"BufferTest.AutomaticCompaction" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = BufferTest.AutomaticCompaction
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BufferTest
+[ RUN      ] BufferTest.AutomaticCompaction
+[       OK ] BufferTest.AutomaticCompaction (0 ms)
+[----------] 1 test from BufferTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"BufferTest.AutomaticCompaction" end time: Oct 09 20:54 UTC
+"BufferTest.AutomaticCompaction" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/60 Testing: BufferTest.ClearResetsCursors
+4/60 Test: BufferTest.ClearResetsCursors
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=BufferTest.ClearResetsCursors" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"BufferTest.ClearResetsCursors" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = BufferTest.ClearResetsCursors
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from BufferTest
+[ RUN      ] BufferTest.ClearResetsCursors
+[       OK ] BufferTest.ClearResetsCursors (0 ms)
+[----------] 1 test from BufferTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"BufferTest.ClearResetsCursors" end time: Oct 09 20:54 UTC
+"BufferTest.ClearResetsCursors" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/60 Testing: TimeTest.SystemTimeProviderBasic
+5/60 Test: TimeTest.SystemTimeProviderBasic
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TimeTest.SystemTimeProviderBasic" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TimeTest.SystemTimeProviderBasic" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TimeTest.SystemTimeProviderBasic
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TimeTest
+[ RUN      ] TimeTest.SystemTimeProviderBasic
+[       OK ] TimeTest.SystemTimeProviderBasic (0 ms)
+[----------] 1 test from TimeTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TimeTest.SystemTimeProviderBasic" end time: Oct 09 20:54 UTC
+"TimeTest.SystemTimeProviderBasic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/60 Testing: TimeTest.MockTimeProviderAdvancement
+6/60 Test: TimeTest.MockTimeProviderAdvancement
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TimeTest.MockTimeProviderAdvancement" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TimeTest.MockTimeProviderAdvancement" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TimeTest.MockTimeProviderAdvancement
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TimeTest
+[ RUN      ] TimeTest.MockTimeProviderAdvancement
+[       OK ] TimeTest.MockTimeProviderAdvancement (0 ms)
+[----------] 1 test from TimeTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TimeTest.MockTimeProviderAdvancement" end time: Oct 09 20:54 UTC
+"TimeTest.MockTimeProviderAdvancement" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/60 Testing: EventLoopTest.TimerExpiration
+7/60 Test: EventLoopTest.TimerExpiration
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=EventLoopTest.TimerExpiration" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"EventLoopTest.TimerExpiration" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = EventLoopTest.TimerExpiration
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from EventLoopTest
+[ RUN      ] EventLoopTest.TimerExpiration
+[       OK ] EventLoopTest.TimerExpiration (0 ms)
+[----------] 1 test from EventLoopTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"EventLoopTest.TimerExpiration" end time: Oct 09 20:54 UTC
+"EventLoopTest.TimerExpiration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/60 Testing: EventLoopTest.CancelTimer
+8/60 Test: EventLoopTest.CancelTimer
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=EventLoopTest.CancelTimer" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"EventLoopTest.CancelTimer" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = EventLoopTest.CancelTimer
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from EventLoopTest
+[ RUN      ] EventLoopTest.CancelTimer
+[       OK ] EventLoopTest.CancelTimer (0 ms)
+[----------] 1 test from EventLoopTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"EventLoopTest.CancelTimer" end time: Oct 09 20:54 UTC
+"EventLoopTest.CancelTimer" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/60 Testing: RespReaderTest.ParseMultibulkCommand
+9/60 Test: RespReaderTest.ParseMultibulkCommand
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespReaderTest.ParseMultibulkCommand" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespReaderTest.ParseMultibulkCommand" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespReaderTest.ParseMultibulkCommand
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespReaderTest
+[ RUN      ] RespReaderTest.ParseMultibulkCommand
+[       OK ] RespReaderTest.ParseMultibulkCommand (0 ms)
+[----------] 1 test from RespReaderTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespReaderTest.ParseMultibulkCommand" end time: Oct 09 20:54 UTC
+"RespReaderTest.ParseMultibulkCommand" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/60 Testing: RespReaderTest.ParseInlineCommand
+10/60 Test: RespReaderTest.ParseInlineCommand
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespReaderTest.ParseInlineCommand" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespReaderTest.ParseInlineCommand" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespReaderTest.ParseInlineCommand
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespReaderTest
+[ RUN      ] RespReaderTest.ParseInlineCommand
+[       OK ] RespReaderTest.ParseInlineCommand (0 ms)
+[----------] 1 test from RespReaderTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"RespReaderTest.ParseInlineCommand" end time: Oct 09 20:54 UTC
+"RespReaderTest.ParseInlineCommand" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/60 Testing: RespReaderTest.ByteAtATimeStreaming
+11/60 Test: RespReaderTest.ByteAtATimeStreaming
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespReaderTest.ByteAtATimeStreaming" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespReaderTest.ByteAtATimeStreaming" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespReaderTest.ByteAtATimeStreaming
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespReaderTest
+[ RUN      ] RespReaderTest.ByteAtATimeStreaming
+[       OK ] RespReaderTest.ByteAtATimeStreaming (0 ms)
+[----------] 1 test from RespReaderTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespReaderTest.ByteAtATimeStreaming" end time: Oct 09 20:54 UTC
+"RespReaderTest.ByteAtATimeStreaming" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/60 Testing: RespReaderTest.PipelinedCommands
+12/60 Test: RespReaderTest.PipelinedCommands
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespReaderTest.PipelinedCommands" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespReaderTest.PipelinedCommands" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespReaderTest.PipelinedCommands
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespReaderTest
+[ RUN      ] RespReaderTest.PipelinedCommands
+[       OK ] RespReaderTest.PipelinedCommands (0 ms)
+[----------] 1 test from RespReaderTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespReaderTest.PipelinedCommands" end time: Oct 09 20:54 UTC
+"RespReaderTest.PipelinedCommands" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/60 Testing: RespReaderTest.MalformedInputsReturnProtocolError
+13/60 Test: RespReaderTest.MalformedInputsReturnProtocolError
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespReaderTest.MalformedInputsReturnProtocolError" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespReaderTest.MalformedInputsReturnProtocolError" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespReaderTest.MalformedInputsReturnProtocolError
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespReaderTest
+[ RUN      ] RespReaderTest.MalformedInputsReturnProtocolError
+[       OK ] RespReaderTest.MalformedInputsReturnProtocolError (0 ms)
+[----------] 1 test from RespReaderTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespReaderTest.MalformedInputsReturnProtocolError" end time: Oct 09 20:54 UTC
+"RespReaderTest.MalformedInputsReturnProtocolError" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/60 Testing: RespWriterTest.WriteSimpleString
+14/60 Test: RespWriterTest.WriteSimpleString
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespWriterTest.WriteSimpleString" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespWriterTest.WriteSimpleString" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespWriterTest.WriteSimpleString
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespWriterTest
+[ RUN      ] RespWriterTest.WriteSimpleString
+[       OK ] RespWriterTest.WriteSimpleString (0 ms)
+[----------] 1 test from RespWriterTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespWriterTest.WriteSimpleString" end time: Oct 09 20:54 UTC
+"RespWriterTest.WriteSimpleString" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/60 Testing: RespWriterTest.WriteError
+15/60 Test: RespWriterTest.WriteError
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespWriterTest.WriteError" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespWriterTest.WriteError" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespWriterTest.WriteError
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespWriterTest
+[ RUN      ] RespWriterTest.WriteError
+[       OK ] RespWriterTest.WriteError (0 ms)
+[----------] 1 test from RespWriterTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespWriterTest.WriteError" end time: Oct 09 20:54 UTC
+"RespWriterTest.WriteError" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/60 Testing: RespWriterTest.WriteInteger
+16/60 Test: RespWriterTest.WriteInteger
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespWriterTest.WriteInteger" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespWriterTest.WriteInteger" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespWriterTest.WriteInteger
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespWriterTest
+[ RUN      ] RespWriterTest.WriteInteger
+[       OK ] RespWriterTest.WriteInteger (0 ms)
+[----------] 1 test from RespWriterTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespWriterTest.WriteInteger" end time: Oct 09 20:54 UTC
+"RespWriterTest.WriteInteger" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/60 Testing: RespWriterTest.WriteBulkString
+17/60 Test: RespWriterTest.WriteBulkString
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespWriterTest.WriteBulkString" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespWriterTest.WriteBulkString" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespWriterTest.WriteBulkString
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespWriterTest
+[ RUN      ] RespWriterTest.WriteBulkString
+[       OK ] RespWriterTest.WriteBulkString (0 ms)
+[----------] 1 test from RespWriterTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespWriterTest.WriteBulkString" end time: Oct 09 20:54 UTC
+"RespWriterTest.WriteBulkString" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/60 Testing: RespWriterTest.WriteNullBulkAndArray
+18/60 Test: RespWriterTest.WriteNullBulkAndArray
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespWriterTest.WriteNullBulkAndArray" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespWriterTest.WriteNullBulkAndArray" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespWriterTest.WriteNullBulkAndArray
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespWriterTest
+[ RUN      ] RespWriterTest.WriteNullBulkAndArray
+[       OK ] RespWriterTest.WriteNullBulkAndArray (0 ms)
+[----------] 1 test from RespWriterTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespWriterTest.WriteNullBulkAndArray" end time: Oct 09 20:54 UTC
+"RespWriterTest.WriteNullBulkAndArray" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/60 Testing: RespWriterTest.WriteStringArray
+19/60 Test: RespWriterTest.WriteStringArray
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RespWriterTest.WriteStringArray" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RespWriterTest.WriteStringArray" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RespWriterTest.WriteStringArray
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RespWriterTest
+[ RUN      ] RespWriterTest.WriteStringArray
+[       OK ] RespWriterTest.WriteStringArray (0 ms)
+[----------] 1 test from RespWriterTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"RespWriterTest.WriteStringArray" end time: Oct 09 20:54 UTC
+"RespWriterTest.WriteStringArray" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/60 Testing: DictTest.BasicOperations
+20/60 Test: DictTest.BasicOperations
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=DictTest.BasicOperations" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"DictTest.BasicOperations" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = DictTest.BasicOperations
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DictTest
+[ RUN      ] DictTest.BasicOperations
+[       OK ] DictTest.BasicOperations (0 ms)
+[----------] 1 test from DictTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"DictTest.BasicOperations" end time: Oct 09 20:54 UTC
+"DictTest.BasicOperations" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/60 Testing: DictTest.OneMillionInsertsWithForcedResize
+21/60 Test: DictTest.OneMillionInsertsWithForcedResize
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=DictTest.OneMillionInsertsWithForcedResize" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"DictTest.OneMillionInsertsWithForcedResize" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = DictTest.OneMillionInsertsWithForcedResize
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DictTest
+[ RUN      ] DictTest.OneMillionInsertsWithForcedResize
+[       OK ] DictTest.OneMillionInsertsWithForcedResize (995 ms)
+[----------] 1 test from DictTest (995 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (995 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   1.02 sec
+----------------------------------------------------------
+Test Passed.
+"DictTest.OneMillionInsertsWithForcedResize" end time: Oct 09 20:54 UTC
+"DictTest.OneMillionInsertsWithForcedResize" time elapsed: 00:00:01
+----------------------------------------------------------
+
+22/60 Testing: RehashTest.ScanReverseBinaryCursorAcrossRehash
+22/60 Test: RehashTest.ScanReverseBinaryCursorAcrossRehash
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=RehashTest.ScanReverseBinaryCursorAcrossRehash" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"RehashTest.ScanReverseBinaryCursorAcrossRehash" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = RehashTest.ScanReverseBinaryCursorAcrossRehash
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from RehashTest
+[ RUN      ] RehashTest.ScanReverseBinaryCursorAcrossRehash
+[       OK ] RehashTest.ScanReverseBinaryCursorAcrossRehash (3 ms)
+[----------] 1 test from RehashTest (3 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (3 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"RehashTest.ScanReverseBinaryCursorAcrossRehash" end time: Oct 09 20:54 UTC
+"RehashTest.ScanReverseBinaryCursorAcrossRehash" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/60 Testing: KeyspaceTest.MultiDatabaseIsolation
+23/60 Test: KeyspaceTest.MultiDatabaseIsolation
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=KeyspaceTest.MultiDatabaseIsolation" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"KeyspaceTest.MultiDatabaseIsolation" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = KeyspaceTest.MultiDatabaseIsolation
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from KeyspaceTest
+[ RUN      ] KeyspaceTest.MultiDatabaseIsolation
+[       OK ] KeyspaceTest.MultiDatabaseIsolation (0 ms)
+[----------] 1 test from KeyspaceTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"KeyspaceTest.MultiDatabaseIsolation" end time: Oct 09 20:54 UTC
+"KeyspaceTest.MultiDatabaseIsolation" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/60 Testing: TTLTest.LazyExpirationBasic
+24/60 Test: TTLTest.LazyExpirationBasic
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TTLTest.LazyExpirationBasic" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TTLTest.LazyExpirationBasic" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TTLTest.LazyExpirationBasic
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TTLTest
+[ RUN      ] TTLTest.LazyExpirationBasic
+[       OK ] TTLTest.LazyExpirationBasic (0 ms)
+[----------] 1 test from TTLTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TTLTest.LazyExpirationBasic" end time: Oct 09 20:54 UTC
+"TTLTest.LazyExpirationBasic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/60 Testing: TTLTest.ExpireAndTTLCommands
+25/60 Test: TTLTest.ExpireAndTTLCommands
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TTLTest.ExpireAndTTLCommands" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TTLTest.ExpireAndTTLCommands" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TTLTest.ExpireAndTTLCommands
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TTLTest
+[ RUN      ] TTLTest.ExpireAndTTLCommands
+[       OK ] TTLTest.ExpireAndTTLCommands (0 ms)
+[----------] 1 test from TTLTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TTLTest.ExpireAndTTLCommands" end time: Oct 09 20:54 UTC
+"TTLTest.ExpireAndTTLCommands" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/60 Testing: TTLTest.ExpireOptionsNX_XX_GT_LT
+26/60 Test: TTLTest.ExpireOptionsNX_XX_GT_LT
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TTLTest.ExpireOptionsNX_XX_GT_LT" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TTLTest.ExpireOptionsNX_XX_GT_LT" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TTLTest.ExpireOptionsNX_XX_GT_LT
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TTLTest
+[ RUN      ] TTLTest.ExpireOptionsNX_XX_GT_LT
+[       OK ] TTLTest.ExpireOptionsNX_XX_GT_LT (0 ms)
+[----------] 1 test from TTLTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TTLTest.ExpireOptionsNX_XX_GT_LT" end time: Oct 09 20:54 UTC
+"TTLTest.ExpireOptionsNX_XX_GT_LT" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/60 Testing: TTLTest.SetCommandTTLOptions
+27/60 Test: TTLTest.SetCommandTTLOptions
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TTLTest.SetCommandTTLOptions" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TTLTest.SetCommandTTLOptions" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TTLTest.SetCommandTTLOptions
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TTLTest
+[ RUN      ] TTLTest.SetCommandTTLOptions
+[       OK ] TTLTest.SetCommandTTLOptions (0 ms)
+[----------] 1 test from TTLTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"TTLTest.SetCommandTTLOptions" end time: Oct 09 20:54 UTC
+"TTLTest.SetCommandTTLOptions" time elapsed: 00:00:00
+----------------------------------------------------------
+
+28/60 Testing: TTLTest.ActiveExpireCycle
+28/60 Test: TTLTest.ActiveExpireCycle
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TTLTest.ActiveExpireCycle" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TTLTest.ActiveExpireCycle" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TTLTest.ActiveExpireCycle
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TTLTest
+[ RUN      ] TTLTest.ActiveExpireCycle
+[       OK ] TTLTest.ActiveExpireCycle (1 ms)
+[----------] 1 test from TTLTest (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TTLTest.ActiveExpireCycle" end time: Oct 09 20:54 UTC
+"TTLTest.ActiveExpireCycle" time elapsed: 00:00:00
+----------------------------------------------------------
+
+29/60 Testing: TTLTest.ReplicaModeBehavior
+29/60 Test: TTLTest.ReplicaModeBehavior
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=TTLTest.ReplicaModeBehavior" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"TTLTest.ReplicaModeBehavior" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = TTLTest.ReplicaModeBehavior
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from TTLTest
+[ RUN      ] TTLTest.ReplicaModeBehavior
+[       OK ] TTLTest.ReplicaModeBehavior (0 ms)
+[----------] 1 test from TTLTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"TTLTest.ReplicaModeBehavior" end time: Oct 09 20:54 UTC
+"TTLTest.ReplicaModeBehavior" time elapsed: 00:00:00
+----------------------------------------------------------
+
+30/60 Testing: SkiplistTest.BasicInsertAndScore
+30/60 Test: SkiplistTest.BasicInsertAndScore
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=SkiplistTest.BasicInsertAndScore" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"SkiplistTest.BasicInsertAndScore" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = SkiplistTest.BasicInsertAndScore
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from SkiplistTest
+[ RUN      ] SkiplistTest.BasicInsertAndScore
+[       OK ] SkiplistTest.BasicInsertAndScore (0 ms)
+[----------] 1 test from SkiplistTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"SkiplistTest.BasicInsertAndScore" end time: Oct 09 20:54 UTC
+"SkiplistTest.BasicInsertAndScore" time elapsed: 00:00:00
+----------------------------------------------------------
+
+31/60 Testing: SkiplistTest.RankAndRange
+31/60 Test: SkiplistTest.RankAndRange
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=SkiplistTest.RankAndRange" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"SkiplistTest.RankAndRange" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = SkiplistTest.RankAndRange
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from SkiplistTest
+[ RUN      ] SkiplistTest.RankAndRange
+[       OK ] SkiplistTest.RankAndRange (0 ms)
+[----------] 1 test from SkiplistTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"SkiplistTest.RankAndRange" end time: Oct 09 20:54 UTC
+"SkiplistTest.RankAndRange" time elapsed: 00:00:00
+----------------------------------------------------------
+
+32/60 Testing: SkiplistTest.RemoveMember
+32/60 Test: SkiplistTest.RemoveMember
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=SkiplistTest.RemoveMember" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"SkiplistTest.RemoveMember" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = SkiplistTest.RemoveMember
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from SkiplistTest
+[ RUN      ] SkiplistTest.RemoveMember
+[       OK ] SkiplistTest.RemoveMember (0 ms)
+[----------] 1 test from SkiplistTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"SkiplistTest.RemoveMember" end time: Oct 09 20:54 UTC
+"SkiplistTest.RemoveMember" time elapsed: 00:00:00
+----------------------------------------------------------
+
+33/60 Testing: EncodingTest.ListpackToQuicklistPromotion
+33/60 Test: EncodingTest.ListpackToQuicklistPromotion
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=EncodingTest.ListpackToQuicklistPromotion" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"EncodingTest.ListpackToQuicklistPromotion" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = EncodingTest.ListpackToQuicklistPromotion
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from EncodingTest
+[ RUN      ] EncodingTest.ListpackToQuicklistPromotion
+[       OK ] EncodingTest.ListpackToQuicklistPromotion (0 ms)
+[----------] 1 test from EncodingTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"EncodingTest.ListpackToQuicklistPromotion" end time: Oct 09 20:54 UTC
+"EncodingTest.ListpackToQuicklistPromotion" time elapsed: 00:00:00
+----------------------------------------------------------
+
+34/60 Testing: EncodingTest.IntsetToHashtablePromotion
+34/60 Test: EncodingTest.IntsetToHashtablePromotion
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=EncodingTest.IntsetToHashtablePromotion" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"EncodingTest.IntsetToHashtablePromotion" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = EncodingTest.IntsetToHashtablePromotion
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from EncodingTest
+[ RUN      ] EncodingTest.IntsetToHashtablePromotion
+[       OK ] EncodingTest.IntsetToHashtablePromotion (0 ms)
+[----------] 1 test from EncodingTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"EncodingTest.IntsetToHashtablePromotion" end time: Oct 09 20:54 UTC
+"EncodingTest.IntsetToHashtablePromotion" time elapsed: 00:00:00
+----------------------------------------------------------
+
+35/60 Testing: EncodingTest.ZSetListpackToSkiplistPromotion
+35/60 Test: EncodingTest.ZSetListpackToSkiplistPromotion
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=EncodingTest.ZSetListpackToSkiplistPromotion" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"EncodingTest.ZSetListpackToSkiplistPromotion" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = EncodingTest.ZSetListpackToSkiplistPromotion
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from EncodingTest
+[ RUN      ] EncodingTest.ZSetListpackToSkiplistPromotion
+[       OK ] EncodingTest.ZSetListpackToSkiplistPromotion (0 ms)
+[----------] 1 test from EncodingTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"EncodingTest.ZSetListpackToSkiplistPromotion" end time: Oct 09 20:54 UTC
+"EncodingTest.ZSetListpackToSkiplistPromotion" time elapsed: 00:00:00
+----------------------------------------------------------
+
+36/60 Testing: PersistenceTest.RdbRoundtripAllTypes
+36/60 Test: PersistenceTest.RdbRoundtripAllTypes
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=PersistenceTest.RdbRoundtripAllTypes" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"PersistenceTest.RdbRoundtripAllTypes" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = PersistenceTest.RdbRoundtripAllTypes
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from PersistenceTest
+[ RUN      ] PersistenceTest.RdbRoundtripAllTypes
+[       OK ] PersistenceTest.RdbRoundtripAllTypes (16 ms)
+[----------] 1 test from PersistenceTest (16 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (16 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"PersistenceTest.RdbRoundtripAllTypes" end time: Oct 09 20:54 UTC
+"PersistenceTest.RdbRoundtripAllTypes" time elapsed: 00:00:00
+----------------------------------------------------------
+
+37/60 Testing: PersistenceTest.RdbCrcMismatchDetection
+37/60 Test: PersistenceTest.RdbCrcMismatchDetection
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=PersistenceTest.RdbCrcMismatchDetection" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"PersistenceTest.RdbCrcMismatchDetection" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = PersistenceTest.RdbCrcMismatchDetection
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from PersistenceTest
+[ RUN      ] PersistenceTest.RdbCrcMismatchDetection
+[       OK ] PersistenceTest.RdbCrcMismatchDetection (29 ms)
+[----------] 1 test from PersistenceTest (29 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (29 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.06 sec
+----------------------------------------------------------
+Test Passed.
+"PersistenceTest.RdbCrcMismatchDetection" end time: Oct 09 20:54 UTC
+"PersistenceTest.RdbCrcMismatchDetection" time elapsed: 00:00:00
+----------------------------------------------------------
+
+38/60 Testing: PersistenceTest.AofRewriteAndRecovery
+38/60 Test: PersistenceTest.AofRewriteAndRecovery
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=PersistenceTest.AofRewriteAndRecovery" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"PersistenceTest.AofRewriteAndRecovery" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = PersistenceTest.AofRewriteAndRecovery
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from PersistenceTest
+[ RUN      ] PersistenceTest.AofRewriteAndRecovery
+[2026-10-09 20:54:05.330] [INFO] Replaying AOF log from test_append.aof
+[       OK ] PersistenceTest.AofRewriteAndRecovery (21 ms)
+[----------] 1 test from PersistenceTest (21 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (21 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"PersistenceTest.AofRewriteAndRecovery" end time: Oct 09 20:54 UTC
+"PersistenceTest.AofRewriteAndRecovery" time elapsed: 00:00:00
+----------------------------------------------------------
+
+39/60 Testing: ReplicationUnitTest.ReplIdManagerBasic
+39/60 Test: ReplicationUnitTest.ReplIdManagerBasic
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=ReplicationUnitTest.ReplIdManagerBasic" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"ReplicationUnitTest.ReplIdManagerBasic" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = ReplicationUnitTest.ReplIdManagerBasic
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from ReplicationUnitTest
+[ RUN      ] ReplicationUnitTest.ReplIdManagerBasic
+[       OK ] ReplicationUnitTest.ReplIdManagerBasic (0 ms)
+[----------] 1 test from ReplicationUnitTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"ReplicationUnitTest.ReplIdManagerBasic" end time: Oct 09 20:54 UTC
+"ReplicationUnitTest.ReplIdManagerBasic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+40/60 Testing: ReplicationUnitTest.BacklogCircularWriteAndPartialResync
+40/60 Test: ReplicationUnitTest.BacklogCircularWriteAndPartialResync
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=ReplicationUnitTest.BacklogCircularWriteAndPartialResync" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"ReplicationUnitTest.BacklogCircularWriteAndPartialResync" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = ReplicationUnitTest.BacklogCircularWriteAndPartialResync
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from ReplicationUnitTest
+[ RUN      ] ReplicationUnitTest.BacklogCircularWriteAndPartialResync
+[       OK ] ReplicationUnitTest.BacklogCircularWriteAndPartialResync (0 ms)
+[----------] 1 test from ReplicationUnitTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"ReplicationUnitTest.BacklogCircularWriteAndPartialResync" end time: Oct 09 20:54 UTC
+"ReplicationUnitTest.BacklogCircularWriteAndPartialResync" time elapsed: 00:00:00
+----------------------------------------------------------
+
+41/60 Testing: ReplicationUnitTest.DeterministicCommandRewriting
+41/60 Test: ReplicationUnitTest.DeterministicCommandRewriting
+Command: "/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/unit_tests" "--gtest_filter=ReplicationUnitTest.DeterministicCommandRewriting" "--gtest_also_run_disabled_tests"
+Directory: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests
+"ReplicationUnitTest.DeterministicCommandRewriting" start time: Oct 09 20:54 UTC
+Output:
+----------------------------------------------------------
+Running main() from /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = ReplicationUnitTest.DeterministicCommandRewriting
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from ReplicationUnitTest
+[ RUN      ] ReplicationUnitTest.DeterministicCommandRewriting
+[       OK ] ReplicationUnitTest.DeterministicCommandRewriting (0 ms)
+[----------] 1 test from ReplicationUnitTest (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"ReplicationUnitTest.DeterministicCommandRewriting" end time: Oct 09 20:54 UTC
+"ReplicationUnitTest.DeterministicCommandRewriting" time elapsed: 00:00:00
+----------------------------------------------------------
+

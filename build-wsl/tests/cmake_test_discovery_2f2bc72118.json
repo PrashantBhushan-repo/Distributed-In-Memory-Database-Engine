@@ -1,5 +1,5 @@
 {
-  "tests": 12,
+  "tests": 19,
   "name": "AllTests",
   "testsuites": [
     {
@@ -101,6 +101,47 @@
           "name": "PubSubPublishAndSubscribe",
           "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/tx_test.cpp",
           "line": 54
+        }
+      ]
+    },
+    {
+      "name": "Stage10IntegrationTest",
+      "tests": 7,
+      "testsuite": [
+        {
+          "name": "ConfigManagerGetSetRewrite",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 26
+        },
+        {
+          "name": "AuthEngineConstantTimeAuth",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 43
+        },
+        {
+          "name": "AclEngineUserPermissions",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 58
+        },
+        {
+          "name": "ObservabilityInfoProvider",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 80
+        },
+        {
+          "name": "SlowlogAndLatencyMonitoring",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 109
+        },
+        {
+          "name": "PrometheusExporter",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 126
+        },
+        {
+          "name": "AdminCommandsRegistration",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
+          "line": 152
         }
       ]
     }

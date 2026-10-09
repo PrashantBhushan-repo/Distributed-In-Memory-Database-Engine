@@ -41,6 +41,9 @@ target_link_libraries(unit_tests
         redisx_memory
         redisx_persistence
         redisx_replication
+        redisx_config
+        redisx_security
+        redisx_obs
         gtest_main
 )
 
@@ -61,6 +64,7 @@ add_executable(integration_tests
     integration/crash_test.cpp
     integration/replication_test.cpp
     integration/tx_test.cpp
+    integration/stage10_test.cpp
 )
 
 target_link_libraries(integration_tests
@@ -73,6 +77,9 @@ target_link_libraries(integration_tests
         redisx_memory
         redisx_persistence
         redisx_replication
+        redisx_config
+        redisx_security
+        redisx_obs
         gtest_main
 )
 
