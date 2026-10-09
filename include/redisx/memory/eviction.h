@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace redisx::memory {
@@ -33,6 +34,17 @@ constexpr std::string_view to_string(EvictionPolicy policy) noexcept {
     case EvictionPolicy::VolatileTTL:    return "volatile-ttl";
     }
     return "noeviction";
+}
+
+constexpr inline EvictionPolicy parse_eviction_policy(std::string_view str) noexcept {
+    if (str == "allkeys-lru")     return EvictionPolicy::AllKeysLRU;
+    if (str == "volatile-lru")    return EvictionPolicy::VolatileLRU;
+    if (str == "allkeys-lfu")     return EvictionPolicy::AllKeysLFU;
+    if (str == "volatile-lfu")    return EvictionPolicy::VolatileLFU;
+    if (str == "allkeys-random")  return EvictionPolicy::AllKeysRandom;
+    if (str == "volatile-random") return EvictionPolicy::VolatileRandom;
+    if (str == "volatile-ttl")    return EvictionPolicy::VolatileTTL;
+    return EvictionPolicy::NoEviction;
 }
 
 struct EvictionCandidate {
