@@ -52,6 +52,14 @@ build CMakeFiles/redisx_core.dir/src/core/buffer.cpp.o: CXX_COMPILER__redisx_cor
   OBJECT_FILE_DIR = CMakeFiles/redisx_core.dir/src/core
   TARGET_SUPPORT_DIR = CMakeFiles/redisx_core.dir
 
+build CMakeFiles/redisx_core.dir/src/core/fault_injection.cpp.o: CXX_COMPILER__redisx_core_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/core/fault_injection.cpp || cmake_object_order_depends_target_redisx_core
+  DEP_FILE = CMakeFiles/redisx_core.dir/src/core/fault_injection.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include
+  OBJECT_DIR = CMakeFiles/redisx_core.dir
+  OBJECT_FILE_DIR = CMakeFiles/redisx_core.dir/src/core
+  TARGET_SUPPORT_DIR = CMakeFiles/redisx_core.dir
+
 build CMakeFiles/redisx_core.dir/src/core/hash.cpp.o: CXX_COMPILER__redisx_core_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/src/core/hash.cpp || cmake_object_order_depends_target_redisx_core
   DEP_FILE = CMakeFiles/redisx_core.dir/src/core/hash.cpp.o.d
   FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
@@ -84,7 +92,7 @@ build CMakeFiles/redisx_core.dir/src/core/time.cpp.o: CXX_COMPILER__redisx_core_
 #############################################
 # Link the static library libredisx_core.a
 
-build libredisx_core.a: CXX_STATIC_LIBRARY_LINKER__redisx_core_ CMakeFiles/redisx_core.dir/src/core/buffer.cpp.o CMakeFiles/redisx_core.dir/src/core/hash.cpp.o CMakeFiles/redisx_core.dir/src/core/logging.cpp.o CMakeFiles/redisx_core.dir/src/core/time.cpp.o
+build libredisx_core.a: CXX_STATIC_LIBRARY_LINKER__redisx_core_ CMakeFiles/redisx_core.dir/src/core/buffer.cpp.o CMakeFiles/redisx_core.dir/src/core/fault_injection.cpp.o CMakeFiles/redisx_core.dir/src/core/hash.cpp.o CMakeFiles/redisx_core.dir/src/core/logging.cpp.o CMakeFiles/redisx_core.dir/src/core/time.cpp.o
   OBJECT_DIR = CMakeFiles/redisx_core.dir
   POST_BUILD = :
   PRE_LINK = :
@@ -804,6 +812,40 @@ build rdbinspect: CXX_EXECUTABLE_LINKER__rdbinspect_ CMakeFiles/rdbinspect.dir/t
   TARGET_SUPPORT_DIR = CMakeFiles/rdbinspect.dir
 
 # =============================================================================
+# Object build statements for EXECUTABLE target loadgen
+
+
+#############################################
+# Order-only phony target for loadgen
+
+build cmake_object_order_depends_target_loadgen: phony || .
+
+build CMakeFiles/loadgen.dir/tools/loadgen.cpp.o: CXX_COMPILER__loadgen_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/tools/loadgen.cpp || cmake_object_order_depends_target_loadgen
+  DEP_FILE = CMakeFiles/loadgen.dir/tools/loadgen.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  OBJECT_DIR = CMakeFiles/loadgen.dir
+  OBJECT_FILE_DIR = CMakeFiles/loadgen.dir/tools
+  TARGET_SUPPORT_DIR = CMakeFiles/loadgen.dir
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target loadgen
+
+
+#############################################
+# Link the executable loadgen
+
+build loadgen: CXX_EXECUTABLE_LINKER__loadgen_ CMakeFiles/loadgen.dir/tools/loadgen.cpp.o
+  DEP_FILE = CMakeFiles/loadgen.dir/link.d
+  LINK_FLAGS = -Wl,--dependency-file=CMakeFiles/loadgen.dir/link.d
+  OBJECT_DIR = CMakeFiles/loadgen.dir
+  POST_BUILD = :
+  PRE_LINK = :
+  TARGET_FILE = loadgen
+  TARGET_PDB = loadgen.dbg
+  TARGET_SUPPORT_DIR = CMakeFiles/loadgen.dir
+
+# =============================================================================
 # Object build statements for EXECUTABLE target redisx
 
 
@@ -1127,6 +1169,30 @@ build tests/CMakeFiles/integration_tests.dir/integration/stage10_test.cpp.o: CXX
   OBJECT_FILE_DIR = tests/CMakeFiles/integration_tests.dir/integration
   TARGET_SUPPORT_DIR = tests/CMakeFiles/integration_tests.dir
 
+build tests/CMakeFiles/integration_tests.dir/integration/chaos_test.cpp.o: CXX_COMPILER__integration_tests_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/tests/integration/chaos_test.cpp || cmake_object_order_depends_target_integration_tests
+  DEP_FILE = tests/CMakeFiles/integration_tests.dir/integration/chaos_test.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest
+  OBJECT_DIR = tests/CMakeFiles/integration_tests.dir
+  OBJECT_FILE_DIR = tests/CMakeFiles/integration_tests.dir/integration
+  TARGET_SUPPORT_DIR = tests/CMakeFiles/integration_tests.dir
+
+build tests/CMakeFiles/integration_tests.dir/property/invariants.cpp.o: CXX_COMPILER__integration_tests_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/tests/property/invariants.cpp || cmake_object_order_depends_target_integration_tests
+  DEP_FILE = tests/CMakeFiles/integration_tests.dir/property/invariants.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest
+  OBJECT_DIR = tests/CMakeFiles/integration_tests.dir
+  OBJECT_FILE_DIR = tests/CMakeFiles/integration_tests.dir/property
+  TARGET_SUPPORT_DIR = tests/CMakeFiles/integration_tests.dir
+
+build tests/CMakeFiles/integration_tests.dir/fuzz/command_fuzz.cpp.o: CXX_COMPILER__integration_tests_unscanned_ /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/tests/fuzz/command_fuzz.cpp || cmake_object_order_depends_target_integration_tests
+  DEP_FILE = tests/CMakeFiles/integration_tests.dir/fuzz/command_fuzz.cpp.o.d
+  FLAGS = -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Werror
+  INCLUDES = -I/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest/include -isystem /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/_deps/googletest-src/googletest
+  OBJECT_DIR = tests/CMakeFiles/integration_tests.dir
+  OBJECT_FILE_DIR = tests/CMakeFiles/integration_tests.dir/fuzz
+  TARGET_SUPPORT_DIR = tests/CMakeFiles/integration_tests.dir
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target integration_tests
@@ -1135,7 +1201,7 @@ build tests/CMakeFiles/integration_tests.dir/integration/stage10_test.cpp.o: CXX
 #############################################
 # Link the executable tests/integration_tests
 
-build tests/integration_tests tests/integration_tests[1]_tests.cmake | ${cmake_ninja_workdir}tests/integration_tests[1]_tests.cmake: CXX_EXECUTABLE_LINKER__integration_tests_ tests/CMakeFiles/integration_tests.dir/integration/echo_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/resp_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/storage_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/eviction_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/crash_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/replication_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/tx_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/stage10_test.cpp.o | libredisx_net.a libredisx_proto.a libredisx_db.a libredisx_commands.a libredisx_types.a libredisx_memory.a libredisx_persistence.a libredisx_replication.a libredisx_config.a libredisx_security.a libredisx_obs.a lib/libgtest_main.a libredisx_net.a libredisx_commands.a libredisx_persistence.a libredisx_replication.a libredisx_config.a libredisx_security.a libredisx_obs.a libredisx_proto.a libredisx_memory.a libredisx_db.a libredisx_types.a libredisx_core.a lib/libgtest.a || lib/libgtest.a lib/libgtest_main.a libredisx_commands.a libredisx_core.a libredisx_db.a libredisx_memory.a libredisx_proto.a libredisx_types.a
+build tests/integration_tests tests/integration_tests[1]_tests.cmake | ${cmake_ninja_workdir}tests/integration_tests[1]_tests.cmake: CXX_EXECUTABLE_LINKER__integration_tests_ tests/CMakeFiles/integration_tests.dir/integration/echo_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/resp_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/storage_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/eviction_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/crash_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/replication_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/tx_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/stage10_test.cpp.o tests/CMakeFiles/integration_tests.dir/integration/chaos_test.cpp.o tests/CMakeFiles/integration_tests.dir/property/invariants.cpp.o tests/CMakeFiles/integration_tests.dir/fuzz/command_fuzz.cpp.o | libredisx_net.a libredisx_proto.a libredisx_db.a libredisx_commands.a libredisx_types.a libredisx_memory.a libredisx_persistence.a libredisx_replication.a libredisx_config.a libredisx_security.a libredisx_obs.a lib/libgtest_main.a libredisx_net.a libredisx_commands.a libredisx_persistence.a libredisx_replication.a libredisx_config.a libredisx_security.a libredisx_obs.a libredisx_proto.a libredisx_memory.a libredisx_db.a libredisx_types.a libredisx_core.a lib/libgtest.a || lib/libgtest.a lib/libgtest_main.a libredisx_commands.a libredisx_core.a libredisx_db.a libredisx_memory.a libredisx_proto.a libredisx_types.a
   DEP_FILE = tests/CMakeFiles/integration_tests.dir/link.d
   LINK_FLAGS = -Wl,--dependency-file=tests/CMakeFiles/integration_tests.dir/link.d
   LINK_LIBRARIES = libredisx_net.a  libredisx_proto.a  libredisx_db.a  libredisx_commands.a  libredisx_types.a  libredisx_memory.a  libredisx_persistence.a  libredisx_replication.a  libredisx_config.a  libredisx_security.a  libredisx_obs.a  lib/libgtest_main.a  libredisx_net.a  libredisx_commands.a  libredisx_persistence.a  libredisx_replication.a  libredisx_config.a  libredisx_security.a  libredisx_obs.a  libredisx_proto.a  libredisx_memory.a  libredisx_db.a  libredisx_types.a  libredisx_core.a  lib/libgtest.a
@@ -1657,7 +1723,7 @@ build unit_tests: phony tests/unit_tests
 #############################################
 # Folder: /mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl
 
-build all: phony libredisx_core.a libredisx_types.a libredisx_db.a libredisx_memory.a libredisx_proto.a libredisx_commands.a libredisx_config.a libredisx_security.a libredisx_obs.a libredisx_replication.a libredisx_persistence.a libredisx_net.a rdbinspect redisx tests/all
+build all: phony libredisx_core.a libredisx_types.a libredisx_db.a libredisx_memory.a libredisx_proto.a libredisx_commands.a libredisx_config.a libredisx_security.a libredisx_obs.a libredisx_replication.a libredisx_persistence.a libredisx_net.a rdbinspect loadgen redisx tests/all
 
 # =============================================================================
 

@@ -65,6 +65,9 @@ add_executable(integration_tests
     integration/replication_test.cpp
     integration/tx_test.cpp
     integration/stage10_test.cpp
+    integration/chaos_test.cpp
+    property/invariants.cpp
+    fuzz/command_fuzz.cpp
 )
 
 target_link_libraries(integration_tests

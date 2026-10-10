@@ -1,4 +1,5 @@
 #include "redisx/commands/admin_cmds.h"
+#include "redisx/core/fault_injection.h"
 #include "redisx/proto/resp_writer.h"
 
 #include <algorithm>
@@ -105,7 +106,34 @@ void register_admin_commands(
                                                                 ) {
         std::string sub = cmd.arg(1);
         std::transform(sub.begin(), sub.end(), sub.begin(), ::toupper);
-        if (sub == "OBJECT" && cmd.arg_count() >= 3) {
+        if (sub == "FAILPOINT" && cmd.arg_count() >= 4) {
+            std::string name = cmd.arg(2);
+            std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+            std::string mode_str = cmd.arg(3);
+            std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(), ::tolower);
+
+            core::FailpointMode mode = core::FailpointMode::Off;
+            double prob = 1.0;
+            if (mode_str == "once") {
+                mode = core::FailpointMode::Once;
+            } else if (mode_str == "always") {
+                mode = core::FailpointMode::Always;
+            } else if (mode_str == "off") {
+                mode = core::FailpointMode::Off;
+            } else if (mode_str == "prob" || mode_str == "probabilistic") {
+                mode = core::FailpointMode::Probabilistic;
+                if (cmd.arg_count() >= 5) {
+                    try { prob = std::stod(cmd.arg(4)); } catch (...) { prob = 0.5; }
+                } else {
+                    prob = 0.5;
+                }
+            }
+            core::FaultInjection::instance().set_failpoint(name, mode, prob);
+            proto::RespWriter::write_simple_string(out_buf, "OK");
+        } else if (sub == "FAILPOINT-RESET") {
+            core::FaultInjection::instance().reset();
+            proto::RespWriter::write_simple_string(out_buf, "OK");
+        } else if (sub == "OBJECT" && cmd.arg_count() >= 3) {
             proto::RespWriter::write_simple_string(out_buf, "Value at:0x123456 refcount:1 encoding:embstr serializedlength:10 lru:1000 lru_seconds_idle:0");
         } else {
             proto::RespWriter::write_simple_string(out_buf, "OK");

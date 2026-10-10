@@ -1,4 +1,5 @@
 #include "redisx/net/listener.h"
+#include "redisx/core/fault_injection.h"
 #include "redisx/core/logging.h"
 #include "redisx/net/socket_utils.h"
 
@@ -142,6 +143,12 @@ void Listener::handle_accept() {
                 break; // No more incoming connections
             }
             REDISX_LOG_ERROR("Accept failed: %s", std::strerror(errno));
+            break;
+        }
+
+        if (FAILPOINT("accept")) {
+            REDISX_LOG_WARN("Injected failure at failpoint 'accept', closing fd %d", client_fd);
+            sock_close(client_fd);
             break;
         }
 

@@ -1,5 +1,5 @@
 {
-  "tests": 19,
+  "tests": 24,
   "name": "AllTests",
   "testsuites": [
     {
@@ -142,6 +142,49 @@
           "name": "AdminCommandsRegistration",
           "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/stage10_test.cpp",
           "line": 152
+        }
+      ]
+    },
+    {
+      "name": "ChaosClusterHarnessTest",
+      "tests": 3,
+      "testsuite": [
+        {
+          "name": "AofDiskErrorsDoNotLoseAcknowledgedWrites",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/chaos_test.cpp",
+          "line": 62
+        },
+        {
+          "name": "CorruptedSnapshotRefusesSilentLoading",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/chaos_test.cpp",
+          "line": 116
+        },
+        {
+          "name": "ReplicasConvergeUnderLinkDropSimulation",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/integration\/chaos_test.cpp",
+          "line": 141
+        }
+      ]
+    },
+    {
+      "name": "PropertyInvariantsTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "DifferentialModelOracleWithRandomStream",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/property\/invariants.cpp",
+          "line": 402
+        }
+      ]
+    },
+    {
+      "name": "CommandFuzzTest",
+      "tests": 1,
+      "testsuite": [
+        {
+          "name": "WholePathRandomBytesRegression",
+          "file": "\/mnt\/c\/Users\/prash\/OneDrive\/Desktop\/pbRedisDB\/tests\/fuzz\/command_fuzz.cpp",
+          "line": 69
         }
       ]
     }

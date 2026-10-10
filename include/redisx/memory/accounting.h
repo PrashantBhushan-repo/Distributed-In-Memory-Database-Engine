@@ -1,9 +1,12 @@
 #ifndef REDISX_MEMORY_ACCOUNTING_H
 #define REDISX_MEMORY_ACCOUNTING_H
 
+#include "redisx/core/fault_injection.h"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <new>
 #include <string_view>
 
 namespace redisx::memory {
@@ -15,7 +18,10 @@ class MemoryTracker {
         return tracker;
     }
 
-    void alloc(size_t size) noexcept {
+    void alloc(size_t size) {
+        if (FAILPOINT("allocation")) {
+            throw std::bad_alloc();
+        }
         size_t current = used_memory_.fetch_add(size, std::memory_order_relaxed) + size;
         size_t peak = peak_memory_.load(std::memory_order_relaxed);
         while (current > peak && !peak_memory_.compare_exchange_weak(peak, current, std::memory_order_relaxed)) {

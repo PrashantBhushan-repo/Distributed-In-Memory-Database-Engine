@@ -1,4 +1,5 @@
 #include "redisx/replication/repl_stream.h"
+#include "redisx/core/fault_injection.h"
 #include "redisx/core/logging.h"
 #include "redisx/core/time.h"
 
@@ -136,6 +137,10 @@ void ReplStream::propagate_command(
 
 void ReplStream::send_bytes_to_all(const std::string &bytes) {
     if (bytes.empty() || replicas_.empty()) return;
+    if (FAILPOINT("replica_send")) {
+        REDISX_LOG_WARN("Injected failure at failpoint 'replica_send'");
+        return;
+    }
 
     std::vector<int> disconnected_fds;
 

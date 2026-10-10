@@ -1,4 +1,5 @@
 #include "redisx/persistence/aof.h"
+#include "redisx/core/fault_injection.h"
 #include "redisx/core/logging.h"
 #include "redisx/core/time.h"
 
@@ -52,6 +53,10 @@ void AofManager::close() {
 
 void AofManager::append_command(std::size_t db_idx, const std::vector<std::string> &args) {
     if (!is_open_ || args.empty()) return;
+    if (FAILPOINT("aof_write")) {
+        REDISX_LOG_WARN("Injected failure at failpoint 'aof_write'");
+        return;
+    }
 
     std::lock_guard<std::mutex> lock(mutex_);
     std::string payload;
@@ -69,12 +74,17 @@ void AofManager::append_command(std::size_t db_idx, const std::vector<std::strin
     }
 
     if (policy_ == FsyncPolicy::Always) {
-        out_.flush();
-        // Force fsync
+        if (!FAILPOINT("fsync")) {
+            out_.flush();
+        }
     }
 }
 
 void AofManager::flush_and_fsync() {
+    if (FAILPOINT("fsync")) {
+        REDISX_LOG_WARN("Injected failure at failpoint 'fsync'");
+        return;
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     if (is_open_ && out_.is_open()) {
         out_.flush();

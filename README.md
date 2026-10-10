@@ -190,7 +190,8 @@ pbRedisDB/
 │   ├── architecture.md     # Engineering & Architectural Overview
 │   ├── benchmarks.md       # Comprehensive Baseline Performance Report
 │   ├── images/             # Embedded Dashboard & Metrics Screenshots
-│   └── replication.md      # PSYNC Replication Protocol Details
+│   ├── replication.md      # PSYNC Replication Protocol Details
+│   └── testing.md          # Stage 11 Testing, Fuzzing & Fault Injection Report
 ├── grafana/                # Grafana Dashboard Definitions (`redisx-dashboard.json`)
 ├── prometheus/             # Prometheus Scrape Configuration (`prometheus.yml`)
 └── docker-compose.yml      # Orchestration for Prometheus & Grafana Monitoring Stack

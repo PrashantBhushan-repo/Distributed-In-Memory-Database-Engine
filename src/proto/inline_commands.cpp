@@ -7,17 +7,15 @@ namespace redisx::proto {
 core::Result<Command> parse_inline_command(std::string_view line) {
     std::vector<std::string> args;
     std::size_t i = 0;
-    const std::size_t len = line.size();
-
     // Strip trailing \r or \n if present
-    while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == '\n')) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) {
         line.remove_suffix(1);
     }
 
     const std::size_t n = line.size();
     while (i < n) {
-        // Skip leading whitespace
-        while (i < n && (line[i] == ' ' || line[i] == '\t')) {
+        // Skip leading whitespace (spaces, tabs, newlines, carriage returns)
+        while (i < n && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r' || line[i] == '\n')) {
             ++i;
         }
         if (i >= n) {
