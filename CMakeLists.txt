@@ -46,6 +46,7 @@ endif()
 # ------------------------------------------------------------
 add_library(redisx_core
     src/core/buffer.cpp
+    src/core/fault_injection.cpp
     src/core/hash.cpp
     src/core/logging.cpp
     src/core/time.cpp
@@ -390,6 +391,14 @@ target_link_libraries(rdbinspect
 
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(rdbinspect PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
+add_executable(loadgen
+    tools/loadgen.cpp
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(loadgen PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
 # ------------------------------------------------------------

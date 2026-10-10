@@ -1,4 +1,5 @@
 #include "redisx/persistence/snapshot_writer.h"
+#include "redisx/core/fault_injection.h"
 #include "redisx/persistence/format.h"
 #include "redisx/core/logging.h"
 #include "redisx/core/time.h"
@@ -31,6 +32,11 @@ static void write_string(std::ofstream &out, std::uint64_t &crc, std::string_vie
 }
 
 bool SnapshotWriter::write_snapshot(const db::Keyspace &keyspace, const std::string &filepath) {
+    if (FAILPOINT("snapshot_write")) {
+        REDISX_LOG_WARN("Injected failure at failpoint 'snapshot_write'");
+        return false;
+    }
+
     std::string tmp_filepath = filepath + ".tmp";
     std::ofstream out(tmp_filepath, std::ios::binary);
     if (!out.is_open()) {
