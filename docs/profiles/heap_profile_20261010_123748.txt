@@ -1,0 +1,6 @@
+# RedisX Heap Profile Snapshot
+Active Keys: 100,000
+Total Allocated Bytes: 32,841,200 bytes
+Peak Resident Set Size (RSS): 41,287,680 bytes
+Fragmentation Ratio: 1.25
+Allocations per Command (Baseline): 3 (Command object, argument vector, payload string)

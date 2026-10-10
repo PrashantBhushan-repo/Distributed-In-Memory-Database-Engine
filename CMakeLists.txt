@@ -15,6 +15,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Options & Sanitizers
 # ------------------------------------------------------------
 option(REDISX_BUILD_TESTS "Build RedisX test suite" ON)
+option(REDISX_BUILD_BENCHMARKS "Build RedisX benchmark suite" ON)
+option(REDISX_ENABLE_JEMALLOC "Link executables with jemalloc allocator" OFF)
 option(REDISX_BUILD_FUZZERS "Build libFuzzer fuzzing targets" OFF)
 option(REDISX_ENABLE_SANITIZER_ADDRESS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(REDISX_ENABLE_SANITIZER_THREAD "Enable ThreadSanitizer" OFF)
@@ -344,6 +346,7 @@ add_library(redisx_net
     src/net/event_loop.cpp
     src/net/connection.cpp
     src/net/listener.cpp
+    src/net/io_threads.cpp
 )
 
 target_include_directories(redisx_net
@@ -397,6 +400,15 @@ add_executable(loadgen
     tools/loadgen.cpp
 )
 
+target_link_libraries(loadgen
+    PRIVATE
+        redisx_bench_workloads
+)
+
+if (WIN32)
+    target_link_libraries(loadgen PRIVATE ws2_32)
+endif()
+
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(loadgen PRIVATE ${REDISX_WARN_FLAGS})
 endif()
@@ -427,10 +439,30 @@ if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx PRIVATE ${REDISX_WARN_FLAGS})
 endif()
 
+if (REDISX_ENABLE_JEMALLOC)
+    find_library(JEMALLOC_LIB NAMES jemalloc)
+    if (NOT JEMALLOC_LIB)
+        find_file(JEMALLOC_LIB NAMES libjemalloc.so.2 libjemalloc.so PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
+    endif()
+    if (JEMALLOC_LIB)
+        message(STATUS "Linking RedisX with jemalloc: ${JEMALLOC_LIB}")
+        target_link_libraries(redisx PRIVATE ${JEMALLOC_LIB})
+    else()
+        message(WARNING "jemalloc requested but not found, falling back to system allocator")
+    endif()
+endif()
+
 # ------------------------------------------------------------
 # Testing & Fuzzing
 # ------------------------------------------------------------
 if (REDISX_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# ------------------------------------------------------------
+# Micro-Benchmarks
+# ------------------------------------------------------------
+if (REDISX_BUILD_BENCHMARKS)
+    add_subdirectory(bench)
 endif()

@@ -55,7 +55,7 @@ void Dispatcher::dispatch(
         return;
     }
 
-    std::string name_upper = cmd.name_upper();
+    const std::string &name_upper = cmd.name_upper();
     const CommandSpec *spec = find_command(name_upper);
 
     if (spec == nullptr) {

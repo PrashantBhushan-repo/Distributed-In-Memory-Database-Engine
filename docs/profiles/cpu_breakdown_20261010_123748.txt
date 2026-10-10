@@ -1,0 +1,7 @@
+# Simulated Component CPU Breakdown (Stage 12 Baseline)
+34.2%  redisx_proto: RespReader::parse / parse_multibulk
+26.5%  libc / kernel: write() / writev() socket syscalls
+18.4%  libc / alloc: malloc() / free() per-command allocations
+12.8%  redisx_db: Dict::find / Dict::insert_or_assign
+ 5.1%  redisx_commands: Dispatcher::dispatch
+ 3.0%  redisx_net: EventLoop::poll / epoll_wait

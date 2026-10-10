@@ -1,3 +1,5 @@
+#include "bench/workloads.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -26,9 +28,10 @@ using socket_t = int;
 struct BenchConfig {
     std::string host = "127.0.0.1";
     int port = 6379;
-    size_t clients = 10;
-    size_t requests = 50000;
+    size_t clients = 20;
+    size_t requests = 100000;
     size_t pipeline = 4;
+    std::string workload_name = "read-heavy"; // read-heavy, write-heavy, cache, pipelined
 };
 
 static inline ssize_t send_bytes(socket_t sock, const void *buf, size_t len) {
@@ -47,7 +50,7 @@ static inline ssize_t recv_bytes(socket_t sock, void *buf, size_t len) {
 #endif
 }
 
-void run_worker(const BenchConfig &cfg, size_t requests_per_client, std::vector<double> &latencies, [[maybe_unused]] size_t worker_id) {
+void run_worker(const BenchConfig &cfg, size_t requests_per_client, std::vector<double> &latencies, size_t worker_id) {
     socket_t sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) return;
 
@@ -61,28 +64,34 @@ void run_worker(const BenchConfig &cfg, size_t requests_per_client, std::vector<
         return;
     }
 
-    std::string pipeline_payload;
-    for (size_t p = 0; p < cfg.pipeline; ++p) {
-        std::string cmd = "*3\r\n$3\r\nSET\r\n$8\r\nload:key\r\n$3\r\nval\r\n";
-        pipeline_payload += cmd;
+    redisx::bench::WorkloadType wtype = redisx::bench::WorkloadType::ReadHeavy;
+    if (cfg.workload_name == "write-heavy") {
+        wtype = redisx::bench::WorkloadType::WriteHeavy;
+    } else if (cfg.workload_name == "cache") {
+        wtype = redisx::bench::WorkloadType::CacheZipfian;
+    } else if (cfg.workload_name == "pipelined") {
+        wtype = redisx::bench::WorkloadType::Pipelined;
     }
 
+    redisx::bench::WorkloadConfig wcfg;
+    wcfg.seed = 0xCAFEBABE1337ULL + worker_id * 10007ULL;
+    redisx::bench::WorkloadGenerator gen(wcfg);
+
     size_t batches = requests_per_client / cfg.pipeline;
-    std::vector<char> recv_buf(4096);
+    std::vector<char> recv_buf(65536);
 
     for (size_t i = 0; i < batches; ++i) {
+        std::string payload = gen.next_pipeline(wtype, cfg.pipeline);
+
         auto start = std::chrono::high_resolution_clock::now();
-        send_bytes(sock, pipeline_payload.data(), pipeline_payload.size());
+        send_bytes(sock, payload.data(), payload.size());
 
-        size_t bytes_needed = 5 * cfg.pipeline; // "+OK\r\n" is 5 bytes
-        size_t bytes_read = 0;
-        while (bytes_read < bytes_needed) {
-            ssize_t n = recv_bytes(sock, recv_buf.data() + bytes_read, recv_buf.size() - bytes_read);
-            if (n <= 0) break;
-            bytes_read += static_cast<size_t>(n);
-        }
-
+        // Drain reply
+        ssize_t n = recv_bytes(sock, recv_buf.data(), recv_buf.size());
         auto finish = std::chrono::high_resolution_clock::now();
+
+        if (n <= 0) break;
+
         double lat_ms = std::chrono::duration<double, std::milli>(finish - start).count();
         latencies.push_back(lat_ms);
     }
@@ -104,11 +113,13 @@ int main(int argc, char **argv) {
         else if (arg == "-c" && i + 1 < argc) cfg.clients = static_cast<size_t>(std::max(1, std::stoi(argv[++i])));
         else if (arg == "-n" && i + 1 < argc) cfg.requests = static_cast<size_t>(std::max(1, std::stoi(argv[++i])));
         else if (arg == "-P" && i + 1 < argc) cfg.pipeline = static_cast<size_t>(std::max(1, std::stoi(argv[++i])));
+        else if (arg == "-w" && i + 1 < argc) cfg.workload_name = argv[++i];
     }
 
     std::cout << "========================================================\n"
-              << " RedisX High-Performance Load Generator (loadgen)\n"
+              << " RedisX Workload-Aware Benchmark Harness (loadgen)\n"
               << " Target: " << cfg.host << ":" << cfg.port << "\n"
+              << " Workload: " << cfg.workload_name << "\n"
               << " Concurrency: " << cfg.clients << " clients | Pipeline: " << cfg.pipeline << "\n"
               << " Total Requests: " << cfg.requests << "\n"
               << "========================================================\n";
@@ -136,24 +147,33 @@ int main(int argc, char **argv) {
     }
 
     if (all_lats.empty()) {
-        std::cerr << "[-] Error: Failed to collect benchmark metrics. Is RedisX running?\n";
+        std::cerr << "[-] Error: Failed to collect benchmark metrics. Is RedisX running on "
+                  << cfg.host << ":" << cfg.port << "?\n";
         return 1;
     }
 
     std::sort(all_lats.begin(), all_lats.end());
     double total_ops = static_cast<double>(all_lats.size() * cfg.pipeline);
     double qps = total_ops / total_sec;
+    double avg_lat = std::accumulate(all_lats.begin(), all_lats.end(), 0.0) / static_cast<double>(all_lats.size());
+    double min_lat = all_lats.front();
+    double max_lat = all_lats.back();
     double p50 = all_lats[static_cast<size_t>(static_cast<double>(all_lats.size()) * 0.50)];
-    double p90 = all_lats[static_cast<size_t>(static_cast<double>(all_lats.size()) * 0.90)];
+    double p95 = all_lats[static_cast<size_t>(static_cast<double>(all_lats.size()) * 0.95)];
     double p99 = all_lats[static_cast<size_t>(static_cast<double>(all_lats.size()) * 0.99)];
+    double p999 = all_lats[static_cast<size_t>(static_cast<double>(all_lats.size()) * 0.999)];
 
-    std::cout << std::fixed << std::setprecision(2)
-              << "\nResults:\n"
-              << "  Throughput:  " << qps << " requests/sec\n"
-              << "  Total Time:  " << total_sec << " seconds\n"
-              << "  Latency p50: " << p50 << " ms\n"
-              << "  Latency p90: " << p90 << " ms\n"
-              << "  Latency p99: " << p99 << " ms\n"
+    std::cout << std::fixed << std::setprecision(3)
+              << "\nBenchmark Results (" << cfg.workload_name << "):\n"
+              << "  Throughput:    " << std::setprecision(1) << qps << " req/sec\n"
+              << "  Elapsed Time:  " << std::setprecision(2) << total_sec << " s\n"
+              << "  Min Latency:   " << std::setprecision(3) << min_lat << " ms\n"
+              << "  Avg Latency:   " << avg_lat << " ms\n"
+              << "  p50 Latency:   " << p50 << " ms\n"
+              << "  p95 Latency:   " << p95 << " ms\n"
+              << "  p99 Latency:   " << p99 << " ms\n"
+              << "  p99.9 Latency: " << p999 << " ms\n"
+              << "  Max Latency:   " << max_lat << " ms\n"
               << "========================================================\n";
 
 #ifdef _WIN32
