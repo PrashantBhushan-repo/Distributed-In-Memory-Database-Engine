@@ -77,6 +77,7 @@ TEST(CommandFuzzTest, WholePathRandomBytesRegression) {
         for (size_t i = 0; i < len; ++i) {
             payload[i] = static_cast<uint8_t>(byte_dist(rng));
         }
+        std::cout << "[Fuzz] run=" << run << " len=" << len << std::endl;
         EXPECT_EQ(LLVMFuzzerTestOneInput(payload.data(), payload.size()), 0);
     }
 }

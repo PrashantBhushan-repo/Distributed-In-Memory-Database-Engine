@@ -150,3 +150,12 @@
 18373	52391	1791614762474016400	tests/integration_tests	1d18f589e0c2a5e5
 18373	52391	1791614762474016400	tests/integration_tests[1]_tests.cmake	1d18f589e0c2a5e5
 18373	52391	1791614762474016400	/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/integration_tests[1]_tests.cmake	1d18f589e0c2a5e5
+1496	2851	1791617301447501300	CMakeFiles/redisx_proto.dir/src/proto/inline_commands.cpp.o	9c65abd2b0c5d8da
+2862	4019	1791617302810076000	libredisx_proto.a	b430024ece2f8beb
+4020	39649	1791617339579843600	tests/integration_tests	1d18f589e0c2a5e5
+4020	39649	1791617339579843600	tests/integration_tests[1]_tests.cmake	1d18f589e0c2a5e5
+4020	39649	1791617339579843600	/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/integration_tests[1]_tests.cmake	1d18f589e0c2a5e5
+1510	19490	1791617426549911900	tests/CMakeFiles/integration_tests.dir/fuzz/command_fuzz.cpp.o	5341373d0e3b40e9
+19500	53767	1791617478782121500	tests/integration_tests	1d18f589e0c2a5e5
+19500	53767	1791617478782121500	tests/integration_tests[1]_tests.cmake	1d18f589e0c2a5e5
+19500	53767	1791617478782121500	/mnt/c/Users/prash/OneDrive/Desktop/pbRedisDB/build-wsl/tests/integration_tests[1]_tests.cmake	1d18f589e0c2a5e5
