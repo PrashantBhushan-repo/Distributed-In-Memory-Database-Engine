@@ -57,14 +57,26 @@ TEST_F(Stage9IntegrationTest, PubSubPublishAndSubscribe) {
 
     int sv[2];
 #ifdef _WIN32
-    // Dummy socket test
-    SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
-    int test_fd = static_cast<int>(s);
+    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(listener, (sockaddr*)&addr, sizeof(addr));
+    int len = sizeof(addr);
+    getsockname(listener, (sockaddr*)&addr, &len);
+    listen(listener, 1);
+    SOCKET client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    connect(client, (sockaddr*)&addr, sizeof(addr));
+    SOCKET server = accept(listener, nullptr, nullptr);
+    closesocket(listener);
+    sv[0] = static_cast<int>(client);
+    sv[1] = static_cast<int>(server);
 #else
     int res = socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
     (void)res;
-    int test_fd = sv[0];
 #endif
+    int test_fd = sv[0];
 
     auto conn = std::make_shared<net::Connection>(loop, test_fd);
 
@@ -77,7 +89,10 @@ TEST_F(Stage9IntegrationTest, PubSubPublishAndSubscribe) {
     pubsub_mgr.unsubscribe(conn, "news");
     EXPECT_FALSE(pubsub_mgr.is_subscribed(test_fd));
 
-#ifndef _WIN32
+#ifdef _WIN32
+    closesocket(static_cast<SOCKET>(sv[0]));
+    closesocket(static_cast<SOCKET>(sv[1]));
+#else
     close(sv[0]);
     close(sv[1]);
 #endif

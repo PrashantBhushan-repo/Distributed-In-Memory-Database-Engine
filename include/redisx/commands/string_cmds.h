@@ -3,11 +3,12 @@
 
 #include "redisx/commands/dispatcher.h"
 #include "redisx/db/ttl.h"
+#include "redisx/obs/info.h"
 
 namespace redisx::commands {
 
 // Registers all Core & String commands into the dispatcher
-void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr);
+void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, obs::ServerStats *stats = nullptr);
 
 // Glob pattern matching helper for KEYS and SCAN MATCH
 bool string_match_glob(std::string_view pattern, std::string_view string, bool ignore_case = false) noexcept;

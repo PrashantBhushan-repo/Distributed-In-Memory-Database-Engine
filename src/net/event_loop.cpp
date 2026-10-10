@@ -40,9 +40,11 @@ EventLoop::EventLoop(std::shared_ptr<core::ITimeProvider> time_provider)
 }
 
 EventLoop::~EventLoop() {
+#ifndef _WIN32
     if (epoll_fd_ != -1) {
         ::close(epoll_fd_);
     }
+#endif
 }
 
 core::Result<void> EventLoop::add_fd(int fd, uint32_t events, EventCallback cb) {

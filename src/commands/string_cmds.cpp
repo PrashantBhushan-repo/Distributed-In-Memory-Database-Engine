@@ -132,7 +132,7 @@ bool string_match_glob(std::string_view pattern, std::string_view string, bool i
     return (p == p_end && s == s_end);
 }
 
-void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
+void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, obs::ServerStats *stats) {
     // ------------------------------------------------------------
     // PING
     // ------------------------------------------------------------
@@ -358,26 +358,30 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
         "GET",
         2,
         CMD_FLAG_READONLY,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+        [&ttl_mgr, stats](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
                    core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
             if (ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
+                if (stats) stats->keyspace_misses++;
                 proto::RespWriter::write_null_bulk(out_buf);
                 return;
             }
 
             db::Entry *e = keyspace.db_get(db_idx, key);
             if (e == nullptr) {
+                if (stats) stats->keyspace_misses++;
                 proto::RespWriter::write_null_bulk(out_buf);
                 return;
             }
 
             if (!e->value.is_string()) {
+                if (stats) stats->keyspace_misses++;
                 proto::RespWriter::write_error(
                     out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value");
                 return;
             }
 
+            if (stats) stats->keyspace_hits++;
             proto::RespWriter::write_bulk_string(out_buf, e->value.as_string());
         }
     });
@@ -410,7 +414,7 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
         "EXISTS",
         -2,
         CMD_FLAG_READONLY,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+        [&ttl_mgr, stats](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
                    core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             std::int64_t exist_count = 0;
             for (std::size_t i = 1; i < cmd.arg_count(); ++i) {
@@ -418,7 +422,12 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
                 if (!ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
                     if (keyspace.db_exists(db_idx, key)) {
                         exist_count++;
+                        if (stats) stats->keyspace_hits++;
+                    } else {
+                        if (stats) stats->keyspace_misses++;
                     }
+                } else {
+                    if (stats) stats->keyspace_misses++;
                 }
             }
             proto::RespWriter::write_integer(out_buf, exist_count);
@@ -464,26 +473,30 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
         "STRLEN",
         2,
         CMD_FLAG_READONLY,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
+        [&ttl_mgr, stats](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
                    core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
             const std::string &key = cmd.arg(1);
             if (ttl_mgr.expire_if_needed(keyspace, db_idx, key)) {
+                if (stats) stats->keyspace_misses++;
                 proto::RespWriter::write_integer(out_buf, 0);
                 return;
             }
 
             db::Entry *e = keyspace.db_get(db_idx, key);
             if (e == nullptr) {
+                if (stats) stats->keyspace_misses++;
                 proto::RespWriter::write_integer(out_buf, 0);
                 return;
             }
 
             if (!e->value.is_string()) {
+                if (stats) stats->keyspace_misses++;
                 proto::RespWriter::write_error(
                     out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value");
                 return;
             }
 
+            if (stats) stats->keyspace_hits++;
             proto::RespWriter::write_integer(
                 out_buf, static_cast<std::int64_t>(e->value.as_string().size()));
         }

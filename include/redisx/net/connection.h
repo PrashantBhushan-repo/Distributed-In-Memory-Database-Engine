@@ -42,7 +42,17 @@ class Connection : public std::enable_shared_from_this<Connection> {
     [[nodiscard]] core::Buffer &out_buffer() noexcept { return out_buf_; }
 
     void set_data_callback(DataCallback cb) { on_data_ = std::move(cb); }
-    void set_close_callback(CloseCallback cb) { on_close_ = std::move(cb); }
+    void set_close_callback(CloseCallback cb) {
+        if (on_close_) {
+            auto prev = std::move(on_close_);
+            on_close_ = [prev = std::move(prev), cb = std::move(cb)](std::shared_ptr<Connection> c) {
+                if (prev) prev(c);
+                if (cb) cb(c);
+            };
+        } else {
+            on_close_ = std::move(cb);
+        }
+    }
 
   private:
     void handle_events(uint32_t events);

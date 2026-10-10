@@ -1,0 +1,27 @@
+services:
+  redisx:
+    build: .
+    container_name: redisx-server
+    ports:
+      - "6379:6379"
+      - "9121:9121"
+    volumes:
+      - ./redis.conf:/etc/redisx/redis.conf
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: redisx-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: redisx-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus

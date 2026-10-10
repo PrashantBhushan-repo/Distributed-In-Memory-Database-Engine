@@ -157,22 +157,20 @@ void Listener::handle_accept() {
             continue;
         }
 
-        Connection::DataCallback data_cb = nullptr;
-        if (on_new_connection_) {
-            data_cb = [this](std::shared_ptr<Connection> c) {
-                if (on_new_connection_) {
-                    on_new_connection_(c);
-                }
-            };
-        }
-
         // Create non-blocking connection object
         auto conn = std::make_shared<Connection>(
             loop_, client_fd,
             [this](std::shared_ptr<Connection> c) { remove_connection(c); },
-            std::move(data_cb));
+            [this](std::shared_ptr<Connection> c) {
+                if (on_new_connection_) {
+                    on_new_connection_(c);
+                }
+            });
 
         connections_[client_fd] = conn;
+        if (on_new_connection_) {
+            on_new_connection_(conn);
+        }
         conn->start();
     }
 }
