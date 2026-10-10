@@ -14,8 +14,8 @@ core::Result<Command> parse_inline_command(std::string_view line) {
 
     const std::size_t n = line.size();
     while (i < n) {
-        // Skip leading whitespace
-        while (i < n && (line[i] == ' ' || line[i] == '\t')) {
+        // Skip leading whitespace (spaces, tabs, newlines, carriage returns)
+        while (i < n && (line[i] == ' ' || line[i] == '\t' || line[i] == '\r' || line[i] == '\n')) {
             ++i;
         }
         if (i >= n) {

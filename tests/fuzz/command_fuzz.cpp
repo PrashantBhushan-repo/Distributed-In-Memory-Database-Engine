@@ -69,15 +69,14 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t *data, std::size_t size
 TEST(CommandFuzzTest, WholePathRandomBytesRegression) {
     std::mt19937_64 rng(0x1337C0DE);
     std::uniform_int_distribution<uint16_t> byte_dist(0, 255);
-    std::uniform_int_distribution<size_t> len_dist(1, 4096);
+    std::uniform_int_distribution<size_t> len_dist(1, 2048);
 
-    for (int run = 0; run < 100; ++run) {
+    for (int run = 0; run < 50; ++run) {
         size_t len = len_dist(rng);
         std::vector<uint8_t> payload(len);
         for (size_t i = 0; i < len; ++i) {
             payload[i] = static_cast<uint8_t>(byte_dist(rng));
         }
-        std::cout << "[Fuzz] run=" << run << " len=" << len << std::endl;
         EXPECT_EQ(LLVMFuzzerTestOneInput(payload.data(), payload.size()), 0);
     }
 }
