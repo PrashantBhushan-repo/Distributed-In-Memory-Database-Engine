@@ -160,7 +160,12 @@ void Listener::handle_accept() {
         // Create non-blocking connection object
         auto conn = std::make_shared<Connection>(
             loop_, client_fd,
-            [this](std::shared_ptr<Connection> c) { remove_connection(c); });
+            [this](std::shared_ptr<Connection> c) { remove_connection(c); },
+            [this](std::shared_ptr<Connection> c) {
+                if (on_new_connection_) {
+                    on_new_connection_(c);
+                }
+            });
 
         connections_[client_fd] = conn;
         if (on_new_connection_) {
