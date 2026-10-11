@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v0.1.0)'
+        required: false
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    name: Build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            arch: x86_64
+            cross: false
+          - target: linux-arm64
+            arch: aarch64
+            cross: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Release Tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "RELEASE_TAG=${{ github.event.inputs.tag_name }}" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+
+      - name: Install Toolchain (x64)
+        if: ${{ !matrix.cross }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++-12
+
+      - name: Install Toolchain (arm64 cross-compiler)
+        if: ${{ matrix.cross }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build gcc-12-aarch64-linux-gnu g++-12-aarch64-linux-gnu
+
+      - name: Configure CMake (Native x64)
+        if: ${{ !matrix.cross }}
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-12 \
+            -DREDISX_BUILD_TESTS=OFF \
+            -DREDISX_BUILD_BENCHMARKS=OFF \
+            -DREDISX_ENABLE_JEMALLOC=OFF
+
+      - name: Configure CMake (Cross arm64)
+        if: ${{ matrix.cross }}
+        run: |
+          cmake -B build -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc-12 \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++-12 \
+            -DREDISX_BUILD_TESTS=OFF \
+            -DREDISX_BUILD_BENCHMARKS=OFF \
+            -DREDISX_ENABLE_JEMALLOC=OFF
+
+      - name: Build Binary
+        run: |
+          cmake --build build --target redisx --parallel $(nproc)
+
+      - name: Strip Binary
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            aarch64-linux-gnu-strip build/redisx
+          else
+            strip build/redisx
+          fi
+
+      - name: Package Release Archive
+        run: |
+          mkdir -p dist
+          PKG_NAME="redisx-${{ env.RELEASE_TAG }}-${{ matrix.target }}"
+          mkdir -p "${PKG_NAME}"
+          cp build/redisx "${PKG_NAME}/"
+          cp redis.conf "${PKG_NAME}/"
+          cp README.md "${PKG_NAME}/"
+          if [ -f LICENSE ]; then cp LICENSE "${PKG_NAME}/"; fi
+          tar -czvf "dist/${PKG_NAME}.tar.gz" "${PKG_NAME}"
+          cd dist
+          sha256sum "${PKG_NAME}.tar.gz" > "${PKG_NAME}.tar.gz.sha256"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-archive
+          path: dist/*
+          retention-days: 5
+
+  publish-release:
+    name: Create GitHub Release
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set Release Tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "RELEASE_TAG=${{ github.event.inputs.tag_name }}" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          fi
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "RedisX Release ${{ env.RELEASE_TAG }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/*.tar.gz
+            release-assets/*.sha256

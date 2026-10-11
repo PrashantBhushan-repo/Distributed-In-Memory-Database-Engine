@@ -1,12 +1,16 @@
 services:
   redisx:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
     container_name: redisx-server
+    command: ["redisx", "-h", "0.0.0.0", "-p", "6379"]
     ports:
       - "6379:6379"
       - "9121:9121"
     volumes:
-      - ./redis.conf:/etc/redisx/redis.conf
+      - ./data:/data
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:latest
@@ -15,13 +19,21 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - redisx
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
     container_name: redisx-grafana
     ports:
       - "3000:3000"
+    volumes:
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     depends_on:
       - prometheus
+    restart: unless-stopped
