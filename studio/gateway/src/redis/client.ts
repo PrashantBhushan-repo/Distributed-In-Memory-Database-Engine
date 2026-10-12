@@ -592,7 +592,7 @@ export class RedisGatewayClient {
   }
 
   public async setTtl(name: string, ttl: number): Promise<{ command: string; success: boolean }> {
-    if (this.status === 'demo' || !this.redis) {
+    if (this.status !== 'connected' || !this.redis) {
       return this.demoEngine.setTtl(name, ttl);
     }
     if (ttl === -1) {
@@ -604,7 +604,7 @@ export class RedisGatewayClient {
   }
 
   public async deleteKey(name: string): Promise<{ command: string; deleted: boolean }> {
-    if (this.status === 'demo' || !this.redis) {
+    if (this.status !== 'connected' || !this.redis) {
       return this.demoEngine.deleteKey(name);
     }
     const count = await this.redis.del(name);
@@ -612,7 +612,7 @@ export class RedisGatewayClient {
   }
 
   public async bulkDeleteKeys(keys: string[], dryRun = false): Promise<{ dryRun: boolean; count: number; sample: string[]; command: string }> {
-    if (this.status === 'demo' || !this.redis) {
+    if (this.status !== 'connected' || !this.redis) {
       return this.demoEngine.bulkDeleteKeys(keys, dryRun);
     }
     const sample = keys.slice(0, 5);

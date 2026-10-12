@@ -1,0 +1,27 @@
+# ------------------------------------------------------------------------------
+# RedisX Studio Web UI Container (Static Nginx)
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json ./
+COPY studio/web/package*.json ./studio/web/
+
+RUN npm --prefix studio/web install --legacy-peer-deps
+
+COPY studio/web ./studio/web
+
+RUN npm --prefix studio/web run build
+
+# ------------------------------------------------------------------------------
+# Lightweight Nginx Web Server
+# ------------------------------------------------------------------------------
+FROM nginx:alpine AS runner
+
+COPY --from=builder /app/studio/web/dist /usr/share/nginx/html
+COPY infra/docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -92,6 +92,28 @@ export class SafetyEngine {
     };
   }
 
+  /**
+   * Redact sensitive credentials (AUTH passwords, CONFIG requirepass, ACL passwords) from args
+   */
+  public sanitizeArgs(cmd: string, args: string[]): string[] {
+    const cmdUpper = cmd.toUpperCase();
+    return args.map((arg, idx) => {
+      if (cmdUpper === 'AUTH' && idx >= 1) return '******';
+      if (
+        cmdUpper === 'CONFIG' &&
+        args[1]?.toLowerCase() === 'set' &&
+        args[2]?.toLowerCase() === 'requirepass' &&
+        idx >= 3
+      ) {
+        return '******';
+      }
+      if (cmdUpper === 'ACL' && args[1]?.toLowerCase() === 'setuser' && (arg.startsWith('>') || arg.startsWith('#'))) {
+        return '>******';
+      }
+      return arg;
+    });
+  }
+
   public recordAudit(
     username: string,
     role: UserRole,
@@ -102,6 +124,7 @@ export class SafetyEngine {
   ) {
     const cmd = args[0]?.toUpperCase() ?? 'UNKNOWN';
     const keysTouched = args.length > 1 ? [args[1]] : [];
+    const sanitizedArgs = this.sanitizeArgs(cmd, args);
 
     const entry: AuditEntry = {
       id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -109,7 +132,7 @@ export class SafetyEngine {
       username,
       role,
       command: cmd,
-      args,
+      args: sanitizedArgs,
       keysTouched,
       durationMs,
       status,

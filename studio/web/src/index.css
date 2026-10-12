@@ -33,6 +33,22 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* Accessibility: Visible keyboard focus ring on all interactive elements */
+:focus-visible {
+  outline: 2px solid #ef4444 !important;
+  outline-offset: 2px !important;
+}
+
+/* Accessibility: Respect user prefers-reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Custom sleek scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

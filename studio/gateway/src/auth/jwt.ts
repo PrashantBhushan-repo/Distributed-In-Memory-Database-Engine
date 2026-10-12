@@ -19,17 +19,18 @@ export async function authenticateUser(username: string, pass: string): Promise<
   return { username, role: user.role };
 }
 
-export async function createToken(user: UserContext): Promise<string> {
+export async function createToken(user: UserContext, expiresIn = '24h'): Promise<string> {
   return new SignJWT({ username: user.username, role: user.role })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('24h')
+    .setExpirationTime(expiresIn)
     .sign(JWT_SECRET);
 }
 
 export async function verifyToken(token: string): Promise<UserContext | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (!payload.username || !payload.role) return null;
     return {
       username: payload.username as string,
       role: payload.role as UserRole,
@@ -37,4 +38,11 @@ export async function verifyToken(token: string): Promise<UserContext | null> {
   } catch {
     return null;
   }
+}
+
+export async function refreshToken(currentToken: string): Promise<{ token: string; user: UserContext } | null> {
+  const user = await verifyToken(currentToken);
+  if (!user) return null;
+  const newToken = await createToken(user);
+  return { token: newToken, user };
 }

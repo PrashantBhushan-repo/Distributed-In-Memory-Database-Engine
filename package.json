@@ -11,6 +11,9 @@
     "gateway:build": "npm --prefix studio/gateway run build",
     "web:dev": "npm --prefix studio/web run dev",
     "web:build": "npm --prefix studio/web run build",
-    "studio": "npm --prefix studio/web run dev"
+    "studio": "npm --prefix studio/web run dev",
+    "test": "npm --prefix studio/gateway test && npm --prefix studio/web test",
+    "test:gateway": "npm --prefix studio/gateway test",
+    "test:web": "npm --prefix studio/web test"
   }
 }

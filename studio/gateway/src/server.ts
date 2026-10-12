@@ -5,18 +5,49 @@ import { z } from 'zod';
 import { RedisGatewayClient } from './redis/client.js';
 import { SafetyEngine } from './safety/engine.js';
 import { MetricsSampler } from './metrics/sampler.js';
-import { authenticateUser, createToken, verifyToken } from './auth/jwt.js';
+import { authenticateUser, createToken, verifyToken, refreshToken } from './auth/jwt.js';
 import { UserContext, MonitorEntry, MonitorFilter, PubSubMessageEvent } from './types.js';
 import { playgroundEngine } from './playground/engine.js';
 
 const app = Fastify({
   logger: {
     level: process.env.LOG_LEVEL || 'info',
+    redact: [
+      'req.headers.authorization',
+      'headers.authorization',
+      'body.password',
+      '*.password',
+      'password',
+    ],
   },
 });
 
+// Content Security Policy and Security Headers Hook
+app.addHook('onSend', async (_req, reply) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('X-XSS-Protection', '1; mode=block');
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  reply.header(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss: http: https:;"
+  );
+});
+
+// Locked CORS to allowed web origins
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+  : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:4000', 'http://127.0.0.1:4000'];
+
 await app.register(cors, {
-  origin: true,
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Origin '${origin}' not permitted by CORS policy`), false);
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 });
 
@@ -25,6 +56,23 @@ await app.register(websocket);
 const redisClient = new RedisGatewayClient();
 const safetyEngine = new SafetyEngine();
 const metricsSampler = new MetricsSampler(redisClient);
+
+// Login rate limiting state (Max 5 attempts / 60 seconds per IP or username)
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function checkLoginRateLimit(key: string): boolean {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+  if (!record || record.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (record.count >= 5) {
+    return false;
+  }
+  record.count += 1;
+  return true;
+}
 
 // Auth helper
 async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<UserContext | null> {
@@ -55,21 +103,47 @@ app.get('/health', async () => {
 
 // 2. Auth login
 const LoginSchema = z.object({
-  username: z.string(),
-  password: z.string(),
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
 });
 
 app.post('/api/auth/login', async (req, reply) => {
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) {
-    return reply.status(400).send({ error: 'Invalid username or password payload' });
+    return reply.status(400).send({
+      error: 'Invalid username or password payload',
+      details: parsed.error.issues.map((i) => i.message),
+    });
   }
+
+  const clientKey = `${req.ip || 'unknown'}:${parsed.data.username}`;
+  if (!checkLoginRateLimit(clientKey)) {
+    return reply.status(429).send({
+      error: 'Too many login attempts. Please wait 1 minute before retrying.',
+    });
+  }
+
   const user = await authenticateUser(parsed.data.username, parsed.data.password);
   if (!user) {
     return reply.status(401).send({ error: 'Invalid credentials' });
   }
+
   const token = await createToken(user);
   return { token, user };
+});
+
+// 2b. Auth refresh
+app.post('/api/auth/refresh', async (req, reply) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return reply.status(401).send({ error: 'Missing or malformed Authorization Bearer header' });
+  }
+  const token = authHeader.substring(7);
+  const refreshed = await refreshToken(token);
+  if (!refreshed) {
+    return reply.status(401).send({ error: 'Invalid or expired token for refresh' });
+  }
+  return refreshed;
 });
 
 // 3. Status & Capabilities
@@ -94,7 +168,8 @@ app.get('/api/keys', async (req, reply) => {
   const query = req.query as any;
   const cursor = Number(query.cursor) || 0;
   const match = query.match || '*';
-  const count = Number(query.count) || 100;
+  const rawCount = Number(query.count) || 100;
+  const count = Math.min(Math.max(1, rawCount), 1000); // capped to max 1000
   const type = query.type || 'all';
 
   return redisClient.getKeys(cursor, match, count, type);
@@ -108,7 +183,8 @@ app.get('/api/keys/tree', async (req, reply) => {
   const query = req.query as any;
   const prefix = query.prefix || '';
   const delimiter = query.delimiter || ':';
-  const maxScan = Number(query.maxScan) || 2000;
+  const rawMaxScan = Number(query.maxScan) || 2000;
+  const maxScan = Math.min(Math.max(10, rawMaxScan), 10000); // capped to max 10000
 
   return redisClient.getKeyTree(prefix, delimiter, maxScan);
 });
@@ -1656,14 +1732,18 @@ app.get('/ws/metrics', { websocket: true }, (connectionOrSocket: any, req) => {
   }
 });
 
-const PORT = Number(process.env.PORT) || 4000;
-const HOST = process.env.HOST || '0.0.0.0';
+export { app, redisClient, safetyEngine };
 
-try {
-  await app.listen({ port: PORT, host: HOST });
-  console.log(`🚀 RedisX Studio Gateway listening on http://${HOST}:${PORT}`);
-  console.log(`📊 Health Endpoint: http://localhost:${PORT}/health`);
-} catch (err) {
-  app.log.error(err);
-  process.exit(1);
+if (process.env.NODE_ENV !== 'test') {
+  const PORT = Number(process.env.PORT) || 4000;
+  const HOST = process.env.HOST || '0.0.0.0';
+
+  try {
+    await app.listen({ port: PORT, host: HOST });
+    console.log(`🚀 RedisX Studio Gateway listening on http://${HOST}:${PORT}`);
+    console.log(`📊 Health Endpoint: http://localhost:${PORT}/health`);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
 }

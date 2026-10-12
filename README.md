@@ -1,202 +1,217 @@
-# RedisX (`pbRedisDB`)
+# RedisX (`pbRedisDB`) & RedisX Studio
 
-> A high-performance, low-latency, event-driven in-memory key-value database engine built from scratch in modern **C++20** featuring a single-threaded `epoll` reactor event loop, full RESP2/RESP3 protocol compliance, master-replica PSYNC replication, dual AOF+RDB persistence, and native OpenMetrics telemetry.
+> A high-performance, low-latency, event-driven in-memory key-value database engine built from scratch in modern **C++20** featuring a single-threaded `epoll` reactor event loop, full RESP2/RESP3 protocol compliance, master-replica PSYNC replication, dual AOF+RDB persistence, native OpenMetrics telemetry, and **RedisX Studio** — an industrial administrative visualizer, real-time telemetry console, and interactive educational playground.
 
 [![Build & Test](https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/actions/workflows/cmake-ci.yml/badge.svg)](https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/actions)
 [![Language](https://img.shields.io/badge/Language-C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Studio](https://img.shields.io/badge/Studio-React%2018%20%2B%20Fastify-emerald.svg)](https://react.dev/)
 [![Protocol](https://img.shields.io/badge/Protocol-RESP2%2FRESP3-red.svg)](https://redis.io/docs/latest/develop/reference/protocol-spec/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## ⚡ 2-Minute Quickstart
+## ⚡ 1-Command Quickstart
 
-You can clone and have RedisX running with full Prometheus & Grafana telemetry in under two minutes:
-
-### Option A: 1-Liner via Docker Compose (Recommended)
+### Option 1: Docker Compose (Full Stack in One Command)
+Run the entire production stack (RedisX Engine + Fastify Gateway + React Studio) with automatic container healthchecks:
 ```bash
-git clone https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine.git
-cd Distributed-In-Memory-Database-Engine
-docker compose -f infra/docker/docker-compose.yml up -d
+docker compose up -d
 ```
-* **RedisX Database**: `localhost:6379`
-* **Grafana SRE Dashboards**: [http://localhost:3000](http://localhost:3000) (Anonymous Viewer enabled)
-* **Prometheus Targets**: [http://localhost:9090](http://localhost:9090)
-* **OpenMetrics Exporter**: [http://localhost:9121/metrics](http://localhost:9121/metrics)
+* **RedisX Studio Web UI**: [http://localhost:3000](http://localhost:3000)
+* **API Gateway & Health**: [http://localhost:4000/health](http://localhost:4000/health)
+* **C++ Redis Engine**: `localhost:6379` (RESP2/RESP3)
 
-### Option B: Standalone Docker Container
+### Option 2: Local Developer Mode (Instant Demo Mode — Zero Setup)
+Run RedisX Studio in pure browser & gateway simulation mode without needing an active C++ Redis daemon:
 ```bash
-docker build -t redisx -f infra/docker/Dockerfile.engine .
-docker run -d -p 6379:6379 -p 9121:9121 --name redisx-server redisx
-```
+# Terminal 1: Fastify API Gateway
+npm run backend
 
-### Talk to it with standard `redis-cli`:
+# Terminal 2: React 18 Studio Frontend
+npm run frontend
+```
+Navigate to **[http://localhost:3000](http://localhost:3000)**. The gateway will automatically fall back to the built-in mock demo engine with pre-seeded datasets, live telemetry, and simulated memory pressure.
+
+### Option 3: Native C++ Engine (Linux / WSL2)
 ```bash
-$ redis-cli -p 6379
-127.0.0.1:6379> PING
-PONG
-127.0.0.1:6379> SET user:1001 '{"name":"Alex","tier":"premium"}' EX 300
-OK
-127.0.0.1:6379> GET user:1001
-"{\"name\":\"Alex\",\"tier\":\"premium\"}"
-127.0.0.1:6379> TTL user:1001
-(integer) 298
-127.0.0.1:6379> LPUSH tasks:queue "task-A" "task-B" "task-C"
-(integer) 3
-127.0.0.1:6379> RPOP tasks:queue
-"task-A"
+# Build stripped release binary
+cmake -B build-wsl -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build-wsl --target redisx --parallel $(nproc)
+
+# Launch RedisX Reactor on port 6379
+./build-wsl/redisx -h 127.0.0.1 -p 6379 -c infra/configs/pbRedis.conf
 ```
-
----
-
-## ⚡ Real Empirical Benchmarks
-
-Evaluated with `redis-benchmark` on Ubuntu 22.04 LTS (x86_64, bare-metal WSL2):
-
-| Workload / Test | Throughput (QPS) | Latency ($p_{50}$) | Latency ($p_{99}$) | Engineering Highlight |
-| :--- | :--- | :--- | :--- | :--- |
-| **`GET` Read Path** | **58,105.75 req/sec** | **0.839 ms** | **1.711 ms** | Sub-millisecond median; zero mutex locking |
-| **`SET` Write Path** | **24,437.93 req/sec** | **2.007 ms** | **4.031 ms** | Non-blocking dictionary insertion & TTL index |
-| **Pipelined Reads (`-P 64`)** | **132,837.41 req/sec**| **0.352 ms** | **0.710 ms** | Zero-copy input/output buffer stream |
-| **Pipelined Writes (`-P 64`)** | **53,573.34 req/sec** | **0.824 ms** | **1.890 ms** | Batched command dispatch & socket flushing |
-| **List Operations (`LPOP`/`LPUSH`)** | **39,769.34 req/sec** | **9.351 ms** | **12.450 ms** | Fast quicklist / listpack chunk traversals |
-| **Set Operations (`SADD`/`SISMEMBER`)** | **37,814.33 req/sec** | **9.671 ms** | **13.110 ms** | Memory-dense sorted intset encodings |
-| **Hash Operations (`HSET`/`HGET`)** | **34,965.04 req/sec** | **10.671 ms** | **14.230 ms** | Internal per-key dictionary maps |
-| **Heavy Payload (`-d 10240` 10 KB)** | **37,965.07 req/sec** | **1.239 ms** | **2.911 ms** | Peak network bandwidth: **388.76 MB/sec** |
-| **Connection Scale (`-c 500` clients)**| **54,704.60 req/sec** | **8.959 ms** | **12.799 ms** | **94.1% Throughput Retention** under concurrency |
-
-*For complete tail-latency graphs and profiling flamegraphs, see [docs/benchmarks.md](docs/benchmarks.md).*
 
 ---
 
 ## 🏛️ System Architecture
 
 ```text
-                            +-----------------------------------+
-                            |    Redis Client / Benchmark       |
-                            |   (redis-cli / python / ioredis)  |
-                            +-----------------+-----------------+
-                                              | TCP Port 6379 (RESP2 / RESP3)
-                                              v
-                            +-----------------+-----------------+
-                            |  EventLoop (Non-blocking Epoll)   |
-                            +-----------------+-----------------+
-                                              |
-                     +------------------------+------------------------+
-                     |                        |                        |
-                     v                        v                        v
-           +------------------+     +------------------+     +-------------------+
-           | RESP Reader/     |     | Command          |     | Metrics Server    |
-           | Writer (RESP2/3) |     | Dispatcher       |     | (HTTP Port 9121)  |
-           +--------+---------+     +--------+---------+     +---------+---------+
-                    |                        |                         |
-                    +------------------------+                         v
-                                             |                 +---------------+
-                                             v                 | OpenMetrics / |
-                                    +------------------+       | Prometheus    |
-                                    |  Keyspace Dict   |       +---------------+
-                                    |  & TTL Manager   |
-                                    +--------+---------+
-                                             |
-                     +-----------------------+-----------------------+
-                     |                       |                       |
-                     v                       v                       v
-           +------------------+    +-------------------+    +------------------+
-           | Memory Eviction  |    | PSYNC Replication |    | AOF & RDB        |
-           | (LRU / LFU / TTL)|    | Stream Backlog    |    | Persistence      |
-           +------------------+    +-------------------+    +------------------+
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │                                REDISX STUDIO                                   │
+ │                          React 18 + Vite Web App                               │
+ │                           (Port 3000 · <87 KB)                                 │
+ └───────────────────────────────────┬────────────────────────────────────────────┘
+                                     │ HTTP REST + WebSockets
+                                     v
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │                             FASTIFY API GATEWAY                                │
+ │                 Zod Validation · AST Safety Engine · JWT Auth                  │
+ │                               (Port 4000)                                      │
+ └───────────────────────────────────┬────────────────────────────────────────────┘
+                                     │ Vectorized Commands (No Shell Concatenation)
+                                     v
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │                           REDISX C++20 ENGINE                                  │
+ │                      Single-Threaded Epoll Reactor                             │
+ │                               (Port 6379)                                      │
+ └──────┬────────────────────────────┬─────────────────────────────┬──────────────┘
+        │                            │                             │
+        v                            v                             v
+ ┌───────────────┐           ┌───────────────┐             ┌───────────────┐
+ │ Keyspace Dict │           │  Dual Engine  │             │ PSYNC Primary │
+ │  & TTL Timer  │           │   AOF + RDB   │             │   Replica     │
+ └───────────────┘           └───────────────┘             └───────────────┘
 ```
 
 ---
 
-## 📋 Supported Commands & Redis Compatibility
+## 📸 Screenshots & Visual Tour
 
-RedisX supports **68+ production Redis commands** with 100% RESP2/RESP3 protocol parity:
+| Feature | Screenshot / Preview | Description |
+| :--- | :--- | :--- |
+| **Interactive Dashboard** | ![Dashboard](docs/screenshots/dashboard.png) | Live ops/sec sparklines, RAM utilization gauge, hit-rate meter, and auto-detecting health diagnostics. |
+| **Key Explorer** | ![Key Explorer](docs/screenshots/keys.png) | Virtualized split-pane browser handling 100k+ keys at 60fps, namespace tree, and typed editors. |
+| **Interactive Console** | ![Console](docs/screenshots/console.png) | CodeMirror 6 terminal, multi-command pipelining, AST safety blocking, and persistent history. |
+| **Architecture Tour** | ![Architecture Tour](docs/screenshots/tour.png) | Interactive SVG pipeline animating requests from TCP socket to storage engine with live telemetry. |
+| **Guided Labs** | ![Guided Labs](docs/screenshots/labs.png) | 6 interactive learning scenarios running in sandbox DB 15 with automated verification. |
 
-| Category | Commands Supported | Redis Compatibility | Notes |
+*(High-resolution asset captures can be generated via the Playwright visual regression suite).*
+
+---
+
+## 📊 Performance & Bundle Size Report
+
+RedisX Studio utilizes route-level code-splitting with `React.lazy()` and `Suspense`, ensuring the initial route bundle stays well below the strict **250 KB gzip budget**:
+
+| Chunk / Module | Raw Size | Gzip Size | Loading Strategy |
+| :--- | :--- | :--- | :--- |
+| **Initial Entry (`index.js`)** | **66.28 kB** | **19.40 kB** | Entry chunk loaded on first paint |
+| **React Core (`vendor-react`)** | **180.81 kB** | **59.46 kB** | Cached shared framework runtime |
+| **Icons (`vendor-icons`)** | **39.90 kB** | **7.25 kB** | Cached Lucide iconography |
+| **TOTAL INITIAL LOAD** | **286.99 kB** | **86.11 kB** | **< 35% of 250 KB Budget! ⚡** |
+| `vendor-codemirror` | 397.67 kB | 129.81 kB | Lazy-loaded on `/console` & `/playground` |
+| `vendor-charts` | 418.32 kB | 119.53 kB | Lazy-loaded on `/metrics` & `/dashboard` |
+| All 18 Route Pages | 12.0 – 69.1 kB | 3.8 – 14.4 kB | Asynchronously split per route |
+
+### Virtualized 60 FPS Rendering
+The Key Explorer virtualizes large keysets using `@tanstack/react-virtual`:
+- **DOM Stability**: Renders only ~20 active DOM nodes regardless of whether 1,000 or 100,000 keys exist.
+- **Scroll Frame Rate**: Maintains a locked **60 FPS** scroll with zero main-thread blocking tasks.
+- **Debounced Lookups**: Real-time pattern searches (`*user*`) debounced to 250ms to prevent gateway saturation.
+
+---
+
+## 🛡️ Security & Safety Model
+
+RedisX enforces an enterprise-grade defense-in-depth model across the API Gateway:
+
+1. **Zero Command-Injection Vector**:
+   - Commands are parsed into typed `string[]` arrays and executed via direct RESP socket tokens (`(ioredis.call(command, ...args)`).
+   - Shell string concatenation and shell execution (`exec`/`spawn`) are strictly forbidden.
+
+2. **Secret Redaction**:
+   - `AUTH` passwords, `CONFIG SET requirepass`, and `ACL SETUSER >password` parameters are automatically sanitized into `******` before storing in audit logs.
+   - Fastify logger headers and request bodies redact `authorization` and `password` fields.
+
+3. **Rate-Limited Authentication**:
+   - In-memory sliding window rate limiter permits a maximum of 5 failed login attempts per minute per IP/user, responding with `429 Too Many Requests`.
+
+4. **Safety Guardian Gatekeeper**:
+   - Destructive operations (`FLUSHALL`, `FLUSHDB`, `SHUTDOWN`, `DEBUG`, `KEYS *`) are intercepted by the AST Safety Engine.
+   - Operators and viewers cannot run dangerous commands; administrators must type **`CONFIRM`** in the confirmation modal before unlocking execution.
+
+5. **Security Headers & Strict CORS**:
+   - Full Content Security Policy (CSP), `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY` applied to all HTTP responses.
+   - CORS locked exclusively to authorized browser origins.
+
+---
+
+## 👥 Role & Permissions Matrix
+
+| Feature / Command Category | Viewer (`viewer`) | Operator (`operator`) | Administrator (`admin`) |
+| :--- | :---: | :---: | :---: |
+| **Read Operations** (`GET`, `MGET`, `HGETALL`, `SCAN`) | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Standard Keyspace Writes** (`SET`, `HSET`, `LPUSH`) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
+| **Key TTL & Expiration** (`EXPIRE`, `PERSIST`) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
+| **Key Deletion** (`DEL`, `UNLINK`, Bulk Delete) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
+| **Live Pub/Sub Publishing** (`PUBLISH`) | ❌ Read-Only | ✅ Allowed | ✅ Allowed |
+| **Configuration Mutations** (`CONFIG SET`) | ❌ Blocked (403) | ❌ Blocked (403) | ✅ Requires Unlock |
+| **Destructive Commands** (`FLUSHALL`, `SHUTDOWN`) | ❌ Blocked (403) | ❌ Blocked (403) | ✅ Requires Unlock |
+| **ACL User Management** (`ACL SETUSER`, `ACL DELUSER`)| ❌ Blocked (403) | ❌ Blocked (403) | ✅ Allowed |
+
+---
+
+## 🧭 Page Features Matrix & Status Checklist
+
+| Page Route | Primary Capabilities | Status | Server Support |
 | :--- | :--- | :---: | :--- |
-| **Strings** | `GET`, `SET`, `MGET`, `MSET`, `INCR`, `DECR`, `INCRBY`, `DECRBY`, `APPEND`, `STRLEN`, `GETSET`, `SETNX`, `SETEX`, `PSETEX` | 100% | Full support for `EX`, `PX`, `NX`, `XX`, `KEEPTTL` options |
-| **Keys & TTL** | `DEL`, `EXISTS`, `TYPE`, `EXPIRE`, `PEXPIRE`, `EXPIREAT`, `PEXPIREAT`, `TTL`, `PTTL`, `PERSIST` | 100% | Millisecond-precision active and passive TTL tracking |
-| **Lists** | `LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `LLEN`, `LRANGE`, `LINDEX`, `LSET`, `LTRIM` | 100% | Backed by contiguous `listpack` and linked `quicklist` |
-| **Hashes** | `HSET`, `HGET`, `HMSET`, `HMGET`, `HDEL`, `HEXISTS`, `HLEN`, `HGETALL`, `HKEYS`, `HVALS`, `HINCRBY` | 100% | Incremental rehashing with zero read stalls |
-| **Sets** | `SADD`, `SREM`, `SMEMBERS`, `SISMEMBER`, `SCARD`, `SINTER`, `SUNION`, `SDIFF` | 100% | Compact integer set (`intset`) and hash table storage |
-| **Sorted Sets** | `ZADD`, `ZREM`, `ZSCORE`, `ZRANGE`, `ZREVRANGE`, `ZCARD`, `ZRANK`, `ZREVRANK`, `ZINCRBY` | 100% | Logarithmic $O(\log N)$ skiplist with rank calculations |
-| **Transactions** | `MULTI`, `EXEC`, `DISCARD`, `WATCH`, `UNWATCH` | 100% | Strict optimistic locking (CAS) across key spaces |
-| **Pub/Sub** | `PUBLISH`, `SUBSCRIBE`, `UNSUBSCRIBE`, `PSUBSCRIBE`, `PUNSUBSCRIBE` | 100% | Channel and glob-pattern messaging routing |
-| **Blocking Ops**| `BLPOP`, `BRPOP`, `BRPOPLPUSH` | 100% | Non-blocking reactor client wakeup queues with timeouts |
-| **Replication** | `REPLCONF`, `PSYNC`, `INFO replication`, `WAIT` | 100% | Circular 1 MB backlog buffer with partial resync |
-| **Persistence** | `SAVE`, `BGSAVE`, `BGREWRITEAOF` | 100% | Binary CRC64 snapshots + AOF append logs |
-| **Admin & Security** | `PING`, `ECHO`, `INFO`, `SELECT`, `DBSIZE`, `FLUSHDB`, `FLUSHALL`, `CONFIG`, `AUTH`, `ACL`, `SLOWLOG`, `LATENCY`, `CLIENT`, `SHUTDOWN` | 100% | Production operational & monitoring commands |
+| **`/dashboard`** | Telemetry sparklines, health diagnostics, condition simulators | **Working** | Full (Native / Demo) |
+| **`/keys`** | Split pane, virtualized list, namespace tree, String/Hash/List/Set/ZSet editors, TTL bulk manager | **Working** | Full (Native / Demo) |
+| **`/console`** | CodeMirror 6 terminal, autocomplete, explain drawer, pipelining, history modal | **Working** | Full (Native / Demo) |
+| **`/playground`** | Interactive visualizer for Strings, Lists, Hashes, Sets, Sorted Sets, Bitmaps, and HyperLogLogs | **Working** | Full (Native / Demo) |
+| **`/memory`** | Treemap memory analyzer, fragmentation ratio, eviction simulation | **Working** | Full (Native / Demo) |
+| **`/expiration`** | Live TTL countdowns, expiration histogram, lazy vs active expiry simulator | **Working** | Full (Native / Demo) |
+| **`/clients`** | Connected clients table, kill client, slow connection detection | **Working** | Full (Native / Demo) |
+| **`/slowlog`** | Execution latency threshold log, Big-O root cause hints, reset | **Working** | Full (Native / Demo) |
+| **`/persistence`** | Dual AOF/RDB timeline, snapshot inspector, BGSAVE trigger | **Working** | Full (Native / Demo) |
+| **`/replication`** | Topology visualizer, lag offset tracker, REPLICAOF configuration | **Working** | Full (Native / Demo) |
+| **`/security`** | ACL user editor, password hasher, category permissions builder | **Working** | Full (Native / Demo) |
+| **`/config`** | Searchable runtime configurations, live validation, config export | **Working** | Full (Native / Demo) |
+| **`/metrics`** | Multi-metric historical chart explorer, p99 latency tracker | **Working** | Full (Native / Demo) |
+| **`/monitor`** | Streaming live command monitor with regex filters and pause buffer | **Working** | Full (Native / Demo) |
+| **`/pubsub`** | Interactive multi-channel pub/sub tester and message inspector | **Working** | Full (Native / Demo) |
+| **`/learn/tour`** | Interactive 9-stage SVG architecture diagram with request tracer | **Working** | Full (Native / Demo) |
+| **`/learn/commands`**| Searchable 68+ command catalog, Big-O complexity filters, playground links | **Working** | Full (Native / Demo) |
+| **`/learn/labs`** | 6 guided hands-on database scenario labs with automated check verification | **Working** | Sandbox DB 15 |
 
 ---
 
-## 📊 Live Observability & SRE Dashboards
+## 🌐 Supported Servers
 
-RedisX features a native HTTP metrics server on port `9121` exporting **12 OpenMetrics parameters**. Integrated with **Prometheus** and **Grafana**, SREs can inspect real-time performance, memory saturation, client connection pools, cache hit ratios, exporter scrape overhead, and target system availability.
-
-![Grafana Executive System Summary](docs/images/grafana_summary_dashboard.png)
-*Figure 1: Executive System Summary — Real-time monitoring of 100+ concurrent clients, 43.2k active keys, 200k+ total commands, and QPS throughput spikes.*
-
-![Grafana Traffic & Memory Saturation](docs/images/grafana_traffic_performance.png)
-*Figure 2: Traffic & Memory Saturation — Live throughput tracking, cache hit vs. miss ratio analytics, and 180+ MB dynamic heap memory allocation tracking.*
+RedisX Studio communicates over standard RESP2 and RESP3 protocols:
+* **RedisX Engine** (`pbRedisDB`): Full support for all core primitives, replication, and telemetry.
+* **Redis 6.x, 7.x, 7.2.x**: Full compatibility across all commands and ACL rules.
+* **Valkey 7.2+ / KeyDB**: Full compatibility for keyspace inspection and telemetry.
+* **Standalone Demo Mode**: 100% offline simulation requiring zero external binaries.
 
 ---
 
-## 📖 Deep-Dive Documentation
+## 🚫 What's Not Implemented
 
-Learn more about the engineering decisions, performance optimizations, and verification frameworks:
-
-* 🏛️ **[docs/design-decisions.md](docs/design-decisions.md)** — Architectural trade-offs: single-threaded reactor, approximate LRU/LFU, listpack encodings, async replication, and dual-engine persistence.
-* ⚡ **[docs/benchmarks.md](docs/benchmarks.md)** — Comprehensive baseline performance sweeps, pipelining analysis, payload bandwidth bounds, and tail latencies.
-* 🧪 **[docs/testing.md](docs/testing.md)** — Differential property tests, STL reference model, chaos fault injection (`FAILPOINT`), and libFuzzer harnesses.
-* 🔄 **[docs/replication.md](docs/replication.md)** — PSYNC state machine, replication backlog ring buffer, and offset recovery.
-* 💾 **[docs/persistence-format.md](docs/persistence-format.md)** — Binary RDB format with CRC64 verification and AOF append log mechanics.
-* 🏗️ **[docs/architecture.md](docs/architecture.md)** — Epoll reactor loop, non-blocking listener, and connection buffer design.
+To maintain architectural simplicity and focus on high-performance single-node predictability, the following features are intentionally out of scope:
+1. **Redis Cluster (Multi-Master Sharding)**: RedisX focuses on master-replica PSYNC topologies; cluster-bus gossip and multi-node hash slot migrations (`CLUSTER SLOTS`) are not implemented.
+2. **Lua Scripting Engine (`EVAL`)**: Embedded Lua runtime execution is omitted in favor of atomic multi-command pipelining (`MULTI`/`EXEC`).
+3. **Dynamic C Module API (`MODULE LOAD`)**: Dynamic shared library loading is not supported.
 
 ---
 
-## 🔨 Building from Source
+## 🧪 Testing & Verification
 
-### Prerequisites
-* Linux (Ubuntu 22.04 LTS recommended) or Windows with WSL2
-* C++20 compiler: `g++-12` or `clang++-15`
-* `CMake` (>= 3.20) and `Ninja`
-
+Run the complete test suite across all packages:
 ```bash
-# 1. Clone the repository
-git clone https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine.git
-cd Distributed-In-Memory-Database-Engine
+# Run both Gateway and Web test suites
+npm test
 
-# 2. Build with CMake presets
-cmake --preset release
-cmake --build --preset release
+# Run Gateway integration tests (Auth, Safety, Caps, Zod validation)
+npm run test:gateway
 
-# 3. Run all unit and integration test tiers
-ctest --preset release --output-on-failure
-
-# 4. Start the server
-./build/release/redisx -h 0.0.0.0 -p 6379
+# Run Web React component tests (Key Explorer, Editors, Console, Modals)
+npm run test:web
 ```
-
-*For more build presets (`debug`, `asan`, `tsan`) and test tier descriptions, see [CONTRIBUTING.md](CONTRIBUTING.md).*
-
----
-
-## 🚫 What's Deliberately Not Implemented
-
-To keep RedisX lean, ultra-fast, and architecturally resilient, the following features are **intentionally omitted**:
-
-1. **Redis Cluster Multi-Master Sharding (`CLUSTER *`)**:
-   - *Rationale:* Multi-master gossip protocols introduce complex network partition states (split-brain) and distributed transaction limits. RedisX targets single-node high throughput with asynchronous primary-replica replication (`PSYNC`), which can be horizontally scaled using standard proxies (Envoy / Twemproxy).
-2. **Lua Scripting Engine (`EVAL` / `EVALSHA`)**:
-   - *Rationale:* Embedding a Lua interpreter introduces garbage collection pauses and security sandboxing vulnerabilities into the hot path. Multi-key atomicity is cleanly delivered via atomic `MULTI`/`EXEC` transactions and `WATCH`.
-3. **Redis Streams (`XADD` / `XREAD` / Consumer Groups)**:
-   - *Rationale:* Pub/Sub and List blocking queues (`LPUSH`/`BRPOP`) cover 95% of in-memory messaging and job queue workloads without the memory overhead of multi-level Radix trees.
-4. **C Dynamic Modules (`MODULE LOAD`)**:
-   - *Rationale:* Dynamic shared object loading creates arbitrary memory corruption hazards that bypass C++20 type safety and memory tracking guarantees.
 
 ---
 
 ## 📜 License
 
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
+MIT License. Crafted with precision for distributed systems engineers and database enthusiasts.

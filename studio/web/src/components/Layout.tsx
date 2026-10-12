@@ -271,6 +271,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               onClick={() => setCollapsed(!collapsed)}
               className="ml-auto text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/40"
               title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+              aria-label={collapsed ? 'Expand sidebar navigation' : 'Collapse sidebar navigation'}
             >
               {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
@@ -401,6 +402,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               onClick={toggleTheme}
               className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/40 transition"
               title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
@@ -410,6 +412,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               onClick={() => setHelpOpen(true)}
               className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800/40 transition"
               title="Page Context Help & Tips (?)"
+              aria-label="Open page context help and documentation drawer"
             >
               <HelpCircle className="h-4 w-4" />
             </button>
