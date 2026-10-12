@@ -1,0 +1,54 @@
+services:
+  redisx:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.engine
+    container_name: redisx-server
+    command: ["redisx", "-h", "0.0.0.0", "-p", "6379", "-c", "/etc/redisx/redis.conf"]
+    ports:
+      - "6379:6379"
+      - "9121:9121"
+    volumes:
+      - ../../data:/data
+    restart: unless-stopped
+
+  studio:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.studio
+    container_name: redisx-studio
+    ports:
+      - "4000:4000"
+    environment:
+      - REDIS_HOST=redisx
+      - REDIS_PORT=6379
+      - PORT=4000
+    depends_on:
+      - redisx
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: redisx-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - redisx
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: redisx-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    depends_on:
+      - prometheus
+    restart: unless-stopped

@@ -1,0 +1,39 @@
+# ------------------------------------------------------------------------------
+# pbRedis Studio (Gateway & Web UI) Container
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package manifests
+COPY package.json ./
+COPY studio/gateway/package*.json ./studio/gateway/
+COPY studio/web/package*.json ./studio/web/
+COPY packages ./packages
+
+# Install dependencies and build
+RUN npm --prefix studio/gateway install
+RUN npm --prefix studio/web install
+
+COPY studio/gateway ./studio/gateway
+COPY studio/web ./studio/web
+
+RUN npm --prefix studio/gateway run build
+RUN npm --prefix studio/web run build
+
+# ------------------------------------------------------------------------------
+# Minimal Node Production Runner
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY package.json ./
+COPY packages ./packages
+COPY --from=builder /app/studio/gateway ./studio/gateway
+COPY --from=builder /app/studio/web/dist ./studio/web/dist
+
+EXPOSE 4000 3000
+
+CMD ["node", "studio/gateway/dist/server.js"]

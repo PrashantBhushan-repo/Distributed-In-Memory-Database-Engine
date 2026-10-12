@@ -464,5 +464,5 @@ endif()
 # Micro-Benchmarks
 # ------------------------------------------------------------
 if (REDISX_BUILD_BENCHMARKS)
-    add_subdirectory(bench)
+    add_subdirectory(benchmarks)
 endif()
