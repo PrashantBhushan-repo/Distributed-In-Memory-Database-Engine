@@ -1,0 +1,41 @@
+{
+  "id": "lab-6-replication-resync",
+  "title": "Replication Protocol & Partial Resync (PSYNC)",
+  "summary": "Understand master-replica replication, replication IDs, byte offsets, and how the circular backlog buffer enables PSYNC partial recovery after transient disconnects.",
+  "category": "Replication",
+  "estimatedMinutes": 8,
+  "requiredCommands": ["INFO", "ROLE", "SET"],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Inspect replication role and master offset",
+      "explanation": "Query INFO replication to view role, master_repl_offset, and connected_slaves count. The master replication offset increments with every written byte.",
+      "command": "INFO replication",
+      "expectedCheck": {
+        "type": "command_success"
+      },
+      "hint": "Run: INFO replication"
+    },
+    {
+      "id": "step-2",
+      "title": "Write a payload and track offset progression",
+      "explanation": "Send a write command. Notice how the primary appends the exact RESP serialized command into its 1MB replication backlog ring buffer and updates master_repl_offset.",
+      "command": "SET play:repl:test \"synced_payload_1001\"",
+      "expectedCheck": {
+        "type": "key_exists",
+        "key": "play:repl:test"
+      },
+      "hint": "Run: SET play:repl:test \"synced_payload_1001\""
+    },
+    {
+      "id": "step-3",
+      "title": "Evaluate PSYNC Partial vs Full Resynchronization",
+      "explanation": "When a replica disconnects and reconnects, it sends `PSYNC <replid> <offset>`. If the replica's offset is still within the primary's circular backlog, the master responds `+CONTINUE` (instant partial sync). If too much time has passed, it falls back to transferring a full RDB snapshot.",
+      "command": "ROLE",
+      "expectedCheck": {
+        "type": "command_success"
+      },
+      "hint": "Run: ROLE to inspect current node topology."
+    }
+  ]
+}

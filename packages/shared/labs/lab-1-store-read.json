@@ -1,0 +1,45 @@
+{
+  "id": "lab-1-store-read",
+  "title": "Store and read your first key",
+  "summary": "Master core Redis string primitives, JSON serialization, and response deserialization.",
+  "category": "Basics",
+  "estimatedMinutes": 5,
+  "requiredCommands": ["SET", "GET", "TYPE", "DEL"],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Set a string key with JSON payload",
+      "explanation": "Redis keys are binary-safe strings up to 512MB. Use the SET command to store a serialized JSON user profile in sandbox DB 15 with the play: prefix.",
+      "command": "SET play:user:101 '{\"name\":\"Alice\",\"role\":\"admin\",\"credits\":50}'",
+      "expectedCheck": {
+        "type": "key_exists",
+        "key": "play:user:101"
+      },
+      "hint": "Click 'Run it for me' or type: SET play:user:101 '{\"name\":\"Alice\",\"role\":\"admin\",\"credits\":50}'"
+    },
+    {
+      "id": "step-2",
+      "title": "Retrieve and inspect the key",
+      "explanation": "Use GET to fetch the value. In the RESP wire protocol, Redis returns a bulk string prefix ($) followed by length and payload.",
+      "command": "GET play:user:101",
+      "expectedCheck": {
+        "type": "key_value_contains",
+        "key": "play:user:101",
+        "substring": "Alice"
+      },
+      "hint": "Run: GET play:user:101"
+    },
+    {
+      "id": "step-3",
+      "title": "Inspect internal data type",
+      "explanation": "Execute TYPE to check how Redis classifies this key. Redis stores strings using raw sds (Simple Dynamic String) or integer encodings.",
+      "command": "TYPE play:user:101",
+      "expectedCheck": {
+        "type": "key_type",
+        "key": "play:user:101",
+        "expectedType": "string"
+      },
+      "hint": "Run: TYPE play:user:101"
+    }
+  ]
+}

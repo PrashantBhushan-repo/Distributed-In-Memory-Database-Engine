@@ -20,6 +20,9 @@ import { MetricsPage } from './pages/MetricsPage';
 import { MonitorPage } from './pages/MonitorPage';
 import { PubSubPage } from './pages/PubSubPage';
 import { PlaygroundPage } from './pages/PlaygroundPage';
+import { LearnTourPage } from './pages/LearnTourPage';
+import { LearnCommandsPage } from './pages/LearnCommandsPage';
+import { LearnLabsPage } from './pages/LearnLabsPage';
 
 export default function App() {
   return (
@@ -77,42 +80,9 @@ export default function App() {
 
           {/* 16. Learn Sub-Routes */}
           <Route path="/learn" element={<Navigate to="/learn/tour" replace />} />
-          <Route
-            path="/learn/tour"
-            element={
-              <PlaceholderPage
-                title="C++20 Architecture Tour"
-                description="Visual pipeline of the non-blocking Linux epoll event loop, connection state machine, and RESP parser."
-                term="rehash"
-                suggestedCommands={['INFO server', 'INFO memory']}
-                stepBadge="Learn"
-              />
-            }
-          />
-          <Route
-            path="/learn/commands"
-            element={
-              <PlaceholderPage
-                title="Command Reference & Algorithmic Complexity"
-                description="Complete dictionary of 68+ Redis commands with worst-case Big-O complexities and category filters."
-                term="pipelining"
-                suggestedCommands={['COMMAND COUNT', 'COMMAND INFO get set']}
-                stepBadge="Learn"
-              />
-            }
-          />
-          <Route
-            path="/learn/labs"
-            element={
-              <PlaceholderPage
-                title="Guided Interactive Database Labs"
-                description="Hands-on interactive scenarios for active failover, memory eviction thresholds, and atomic transactions."
-                term="eviction"
-                suggestedCommands={['MULTI', 'SET lab:key "val"', 'EXEC']}
-                stepBadge="Learn"
-              />
-            }
-          />
+          <Route path="/learn/tour" element={<LearnTourPage />} />
+          <Route path="/learn/commands" element={<LearnCommandsPage />} />
+          <Route path="/learn/labs" element={<LearnLabsPage />} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

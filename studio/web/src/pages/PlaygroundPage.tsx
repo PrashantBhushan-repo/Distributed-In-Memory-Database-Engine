@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Layers,
   Database,
@@ -10,6 +10,7 @@ import {
   HardDrive,
   Cpu,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import {
   PlaygroundDataType,
   PlaygroundInspectResponse,
@@ -164,6 +165,17 @@ export const PlaygroundPage: React.FC = () => {
       setExecuting(false);
     }
   };
+
+  const [searchParams] = useSearchParams();
+  const prefillCmd = searchParams.get('cmd');
+  const hasRunPrefill = useRef(false);
+
+  useEffect(() => {
+    if (prefillCmd && !hasRunPrefill.current) {
+      hasRunPrefill.current = true;
+      handleExecute(prefillCmd);
+    }
+  }, [prefillCmd]);
 
   // Push past threshold routine
   const handlePushPastThreshold = async (type: PlaygroundDataType) => {

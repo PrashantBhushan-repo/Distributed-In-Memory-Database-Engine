@@ -1,0 +1,43 @@
+{
+  "id": "lab-4-transactions-watch",
+  "title": "Atomic Transactions with MULTI/EXEC & Optimistic Locking",
+  "summary": "Learn how Redis queues commands with MULTI, guarantees all-or-nothing sequential execution with EXEC, and uses WATCH for optimistic lock validation.",
+  "category": "Transactions",
+  "estimatedMinutes": 7,
+  "requiredCommands": ["SET", "MULTI", "EXEC", "INCRBY", "DECRBY", "WATCH"],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Initialize banking balances",
+      "explanation": "Set up two bank accounts for an atomic money transfer: Alice starts with $100 and Bob with $50.",
+      "command": "MSET play:bank:alice 100 play:bank:bob 50",
+      "expectedCheck": {
+        "type": "key_exists",
+        "key": "play:bank:alice"
+      },
+      "hint": "Run: MSET play:bank:alice 100 play:bank:bob 50"
+    },
+    {
+      "id": "step-2",
+      "title": "Execute an atomic transfer inside MULTI/EXEC",
+      "explanation": "When you call MULTI, Redis flags the client connection as DIRTY_CAS / TRANSACTION. Subsequent commands are queued in memory and respond with +QUEUED until EXEC executes them consecutively.",
+      "command": "MULTI\nDECRBY play:bank:alice 40\nINCRBY play:bank:bob 40\nEXEC",
+      "expectedCheck": {
+        "type": "key_value_equals",
+        "key": "play:bank:alice",
+        "expectedValue": "60"
+      },
+      "hint": "Execute the pipeline: MULTI, then DECRBY play:bank:alice 40, INCRBY play:bank:bob 40, and EXEC."
+    },
+    {
+      "id": "step-3",
+      "title": "Optimistic concurrency control with WATCH",
+      "explanation": "WATCH monitors keys for modifications before a transaction begins. If another client modifies a watched key before EXEC, Redis marks the transaction dirty and EXEC returns a nil array (aborted).",
+      "command": "WATCH play:bank:alice\nMULTI\nINCRBY play:bank:alice 10\nEXEC",
+      "expectedCheck": {
+        "type": "command_success"
+      },
+      "hint": "Run WATCH play:bank:alice, then MULTI, INCRBY play:bank:alice 10, EXEC."
+    }
+  ]
+}

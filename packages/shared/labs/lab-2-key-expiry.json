@@ -1,0 +1,47 @@
+{
+  "id": "lab-2-key-expiry",
+  "title": "Watch a key expire (TTL, lazy vs active expiry)",
+  "summary": "Discover how Redis manages ephemeral data using millisecond TTL countdowns, active 10Hz sampling cycles, and passive lazy checks on read.",
+  "category": "Expiration",
+  "estimatedMinutes": 5,
+  "requiredCommands": ["SET", "TTL", "GET"],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Set a transient key with a 6-second expiration",
+      "explanation": "Attach a TTL using the EX flag. Under the hood, Redis stores the key pointer in an internal expires hash table alongside its millisecond UNIX timestamp deadline.",
+      "command": "SET play:session:temp \"tok_9823\" EX 6",
+      "expectedCheck": {
+        "type": "ttl_between",
+        "key": "play:session:temp",
+        "min": 1,
+        "max": 6
+      },
+      "hint": "Run: SET play:session:temp \"tok_9823\" EX 6"
+    },
+    {
+      "id": "step-2",
+      "title": "Inspect the remaining Time To Live",
+      "explanation": "Execute TTL to observe the remaining lifetime in seconds. If the key exists and has an expiration, Redis returns a positive integer. (Returns -1 if persistent, -2 if gone).",
+      "command": "TTL play:session:temp",
+      "expectedCheck": {
+        "type": "ttl_between",
+        "key": "play:session:temp",
+        "min": 0,
+        "max": 6
+      },
+      "hint": "Run: TTL play:session:temp"
+    },
+    {
+      "id": "step-3",
+      "title": "Observe lazy deletion after deadline expires",
+      "explanation": "Wait 6 seconds for the TTL to expire. When you query GET on an expired key, Redis tests the timestamp during lookup, deletes the key passively, and returns nil.",
+      "command": "GET play:session:temp",
+      "expectedCheck": {
+        "type": "key_not_exists",
+        "key": "play:session:temp"
+      },
+      "hint": "Wait for the 6-second timer to run out, then execute: GET play:session:temp"
+    }
+  ]
+}

@@ -13,7 +13,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Time To Live (TTL)',
     shortDesc: 'A countdown timer in seconds or milliseconds attached to a key.',
     detailedDesc: 'When the timer hits zero, RedisX automatically evicts the key from memory through active expiration cycles or passive access checks.',
-    learnLink: '/expiration',
+    learnLink: '/learn/labs?lab=lab-2-key-expiry',
     category: 'core',
   },
   eviction: {
@@ -21,7 +21,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Memory Eviction',
     shortDesc: 'The process of freeing memory when the database reaches maxmemory.',
     detailedDesc: 'RedisX uses sample-based algorithms (LRU, LFU, or TTL) to evict candidate keys without taking performance-killing global locks.',
-    learnLink: '/memory',
+    learnLink: '/learn/labs?lab=lab-3-trigger-eviction',
     category: 'memory',
   },
   'replication offset': {
@@ -29,7 +29,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Replication Offset',
     shortDesc: 'A monotonically increasing byte counter tracking the stream of writes.',
     detailedDesc: 'Both the primary and replicas maintain an offset. The difference between them represents replication lag in bytes.',
-    learnLink: '/replication',
+    learnLink: '/learn/tour?stage=subsystems',
     category: 'replication',
   },
   encoding: {
@@ -37,7 +37,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Internal Encoding',
     shortDesc: 'The exact physical C++20 memory structure used to store a key value.',
     detailedDesc: 'RedisX transparently picks compact encodings like listpack or intset for small datasets and promotes them to quicklists or skiplists as they grow.',
-    learnLink: '/playground',
+    learnLink: '/learn/labs?lab=lab-5-data-types',
     category: 'core',
   },
   listpack: {
@@ -45,7 +45,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Listpack Encoding',
     shortDesc: 'A contiguous memory array storing serialized string or integer elements.',
     detailedDesc: 'Unlike linked lists which waste 24 bytes of pointers per node, listpack stores elements back-to-back, saving up to 80% RAM.',
-    learnLink: '/playground',
+    learnLink: '/learn/labs?lab=lab-5-data-types',
     category: 'memory',
   },
   rehash: {
@@ -53,7 +53,23 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Incremental Rehashing',
     shortDesc: 'Resizing the internal hash table dictionary as keys multiply.',
     detailedDesc: 'RedisX rehashes step-by-step ($O(1)$ amortized per tick) across two internal hash tables, preventing sudden CPU latency spikes.',
-    learnLink: '/learn/tour',
+    learnLink: '/learn/tour?stage=storage',
+    category: 'core',
+  },
+  epoll: {
+    term: 'epoll',
+    title: 'Linux epoll Reactor',
+    shortDesc: 'The single-threaded I/O event loop powering non-blocking database throughput.',
+    detailedDesc: 'epoll sleeps with 0% CPU until hardware network interrupts fire, waking up in O(1) time only for active client sockets.',
+    learnLink: '/learn/tour?stage=epoll',
+    category: 'core',
+  },
+  resp: {
+    term: 'resp',
+    title: 'REdis Serialization Protocol (RESP)',
+    shortDesc: 'The binary-safe human-readable wire protocol used by all Redis clients.',
+    detailedDesc: 'Prefixes data types with simple tokens (* array, $ bulk string, + simple string, : integer) for zero-copy streaming deserialization.',
+    learnLink: '/learn/tour?stage=resp',
     category: 'core',
   },
   aof: {
@@ -61,7 +77,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Append-Only File (AOF)',
     shortDesc: 'A persistent log that records every write command executed by the engine.',
     detailedDesc: 'On restart, RedisX replays the AOF log to reconstruct the database state with configurable fsync durability policies.',
-    learnLink: '/persistence',
+    learnLink: '/learn/tour?stage=subsystems',
     category: 'persistence',
   },
   'rdb snapshot': {
@@ -69,7 +85,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'RDB Binary Snapshot',
     shortDesc: 'A compact point-in-time binary dump of the entire in-memory dataset.',
     detailedDesc: 'Protected by 64-bit CRC checksums, RDB files enable instantaneous cold server boots and full-sync replication handshakes.',
-    learnLink: '/persistence',
+    learnLink: '/learn/tour?stage=subsystems',
     category: 'persistence',
   },
   pipelining: {
@@ -77,7 +93,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'I/O Pipelining',
     shortDesc: 'Sending multiple commands in a batch without waiting for individual replies.',
     detailedDesc: 'Pipelining drastically reduces TCP round-trip latency and kernel context switches, enabling throughputs exceeding 132,000 req/sec.',
-    learnLink: '/console',
+    learnLink: '/learn/tour?stage=resp',
     category: 'core',
   },
   'hit rate': {
@@ -85,7 +101,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Cache Hit Rate',
     shortDesc: 'The percentage of key lookup queries that successfully find data in RAM.',
     detailedDesc: 'Calculated as hits / (hits + misses). High hit rates (>95%) confirm effective caching and minimal database fallbacks.',
-    learnLink: '/dashboard',
+    learnLink: '/learn/tour?stage=db',
     category: 'memory',
   },
   maxmemory: {
@@ -93,7 +109,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Max Memory Limit',
     shortDesc: 'The maximum heap RAM limit configured for the database instance.',
     detailedDesc: 'When memory reaches maxmemory, RedisX activates the chosen eviction policy or rejects incoming writes with OOM errors.',
-    learnLink: '/memory',
+    learnLink: '/learn/labs?lab=lab-3-trigger-eviction',
     category: 'memory',
   },
   replica: {
@@ -101,7 +117,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Replica Node',
     shortDesc: 'A secondary read-only database instance replicating from a primary.',
     detailedDesc: 'Replicas connect using the PSYNC protocol, allowing horizontal read scaling and high availability failover.',
-    learnLink: '/replication',
+    learnLink: '/learn/labs?lab=lab-6-replication-resync',
     category: 'replication',
   },
   acl: {
@@ -133,7 +149,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'SkipList Encoding',
     shortDesc: 'A probabilistic multi-level linked list providing $O(\\log N)$ search, insertion and rank lookups.',
     detailedDesc: 'Used for Sorted Sets with large element counts or high scores, delivering balanced binary tree performance with simpler memory rebalancing.',
-    learnLink: '/playground',
+    learnLink: '/learn/labs?lab=lab-5-data-types',
     category: 'memory',
   },
   quicklist: {
@@ -141,7 +157,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Quicklist Encoding',
     shortDesc: 'A dual-ended linked list composed of compressed listpack nodes.',
     detailedDesc: 'Balances fast list push/pop operations with high spatial memory density, preventing excessive pointer overhead.',
-    learnLink: '/playground',
+    learnLink: '/learn/labs?lab=lab-5-data-types',
     category: 'memory',
   },
   intset: {
@@ -149,7 +165,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Intset Encoding',
     shortDesc: 'An extremely compact sorted array of integers without pointer overhead.',
     detailedDesc: 'Used for Sets containing exclusively integers, dynamically upgrading from 16-bit to 32-bit and 64-bit integers as values grow.',
-    learnLink: '/playground',
+    learnLink: '/learn/labs?lab=lab-5-data-types',
     category: 'memory',
   },
   raw: {
@@ -157,7 +173,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Raw String (SDS)',
     shortDesc: 'A standard Simple Dynamic String allocation with a separate header.',
     detailedDesc: 'Used for strings larger than 44 bytes, allowing zero-copy resizing, $O(1)$ length queries, and binary safety.',
-    learnLink: '/playground',
+    learnLink: '/learn/commands?cmd=set',
     category: 'core',
   },
   embstr: {
@@ -165,7 +181,7 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Embedded String (embstr)',
     shortDesc: 'An optimized string allocated in a single memory block together with the redisObject header.',
     detailedDesc: 'Used for short strings (up to 44 bytes), reducing heap memory allocations from two to one.',
-    learnLink: '/playground',
+    learnLink: '/learn/commands?cmd=set',
     category: 'memory',
   },
   hashtable: {
@@ -173,7 +189,23 @@ export const GLOSSARY: Record<string, GlossaryTerm> = {
     title: 'Hashtable Encoding',
     shortDesc: 'A full in-memory dictionary using MurmurHash2 and incremental rehashing.',
     detailedDesc: 'Used when a Hash or Set exceeds listpack thresholds, supporting millions of fields with $O(1)$ average lookups.',
-    learnLink: '/playground',
+    learnLink: '/learn/commands?cmd=hset',
     category: 'memory',
+  },
+  multi: {
+    term: 'multi',
+    title: 'MULTI / EXEC Transactions',
+    shortDesc: 'Atomic sequential execution of commands without interleaving.',
+    detailedDesc: 'Commands queued inside MULTI are executed consecutively when EXEC is called, paired with WATCH for optimistic locking.',
+    learnLink: '/learn/labs?lab=lab-4-transactions-watch',
+    category: 'core',
+  },
+  complexity: {
+    term: 'complexity',
+    title: 'Algorithmic Complexity (Big-O)',
+    shortDesc: 'Theoretical performance scaling of a command as dataset size N grows.',
+    detailedDesc: 'Redis emphasizes O(1) and O(log N) operations. O(N) commands (like KEYS *) stall the single-threaded reactor and must be avoided.',
+    learnLink: '/learn/commands',
+    category: 'core',
   },
 };
