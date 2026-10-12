@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "RedisX In-Memory Database Engine & RedisX Studio",
   "scripts": {
+    "backend": "npm --prefix studio/gateway run dev",
+    "frontend": "npm --prefix studio/web run dev",
+    "backend:build": "npm --prefix studio/gateway run build",
+    "frontend:build": "npm --prefix studio/web run build",
     "gateway:dev": "npm --prefix studio/gateway run dev",
     "gateway:build": "npm --prefix studio/gateway run build",
     "web:dev": "npm --prefix studio/web run dev",
