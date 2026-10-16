@@ -1,27 +1,151 @@
 services:
+  # ----------------------------------------------------------------------------
+  # 1. C++ High-Performance In-Memory Database Engine
+  # ----------------------------------------------------------------------------
   redisx:
-    build: .
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.engine
+    image: redisx:latest
     container_name: redisx-server
+    command: ["redisx", "-h", "0.0.0.0", "-p", "6379", "-c", "/etc/redisx/redis.conf"]
     ports:
       - "6379:6379"
       - "9121:9121"
     volumes:
-      - ./redis.conf:/etc/redisx/redis.conf
+      - ./data:/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6379 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
 
+  # ----------------------------------------------------------------------------
+  # 2. Fastify API Gateway & Safety Validation Layer
+  # ----------------------------------------------------------------------------
+  gateway:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.gateway
+    image: redisx-gateway:latest
+    container_name: redisx-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      - REDIS_HOST=redisx
+      - REDIS_PORT=6379
+      - PORT=4000
+      - HOST=0.0.0.0
+      - LOG_LEVEL=info
+      - DEMO_FALLBACK=true
+      - JWT_SECRET=redisx-studio-super-secure-production-secret-key-32chars!
+      - CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000
+    depends_on:
+      redisx:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 3. React 18 Studio Web Visualizer & Playground
+  # ----------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.web
+    image: redisx-web:latest
+    container_name: redisx-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  # ----------------------------------------------------------------------------
+  # 4. Prometheus Telemetry & Metrics Scraper
+  # ----------------------------------------------------------------------------
   prometheus:
     image: prom/prometheus:latest
     container_name: redisx-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redisx:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ----------------------------------------------------------------------------
+  # 5. Grafana Real-Time Observability Dashboards
+  # ----------------------------------------------------------------------------
   grafana:
     image: grafana/grafana:latest
     container_name: redisx-grafana
     ports:
-      - "3000:3000"
+      - "3002:3002"
     environment:
+      - GF_SERVER_HTTP_PORT=3002
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  prometheus-data:
+  grafana-data:

@@ -1,0 +1,34 @@
+# Git
+.git/
+.gitignore
+.github/
+
+# Host build artifacts
+build/
+build-wsl/
+build_ucrt/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.rdb
+*.aof
+
+# Node modules & temporary artifacts
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.npm/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation, benchmarks & tests
+docs/
+benchmarks/
+tests/

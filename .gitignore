@@ -1,6 +1,7 @@
 # Build directories
 build/
-build-wsl/
+build-*/
+build_*/
 cmake-build-*/
 out/
 
@@ -9,6 +10,14 @@ out/
 *.a
 *.so
 *.out
+*.exe
+
+# Database & persistence runtime dumps
+*.rdb
+*.aof
+dump.rdb
+appendonly.aof
+data/
 
 # IDE
 .idea/
@@ -17,6 +26,7 @@ out/
 
 # OS
 .DS_Store
+Thumbs.db
 
 # CMake
 CMakeCache.txt
@@ -25,6 +35,14 @@ CTestTestfile.cmake
 cmake_install.cmake
 Makefile
 install_manifest.txt
+
+# Node & Studio
+node_modules/
+dist/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Coverage
 coverage/
@@ -43,3 +61,13 @@ logs/
 # Temporary files
 *.tmp
 *.swp
+
+# Credentials & Keys (Never commit private keys!)
+*.pem
+*.key
+*.cer
+*.crt
+id_rsa*
+.env
+.env.local
+.env.*.local

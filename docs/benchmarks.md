@@ -142,9 +142,9 @@ WARNING: Could not fetch server CONFIG
 
 ## 5. Stage 12 Workload Generators & Google Benchmark Micro-Benchmarks
 
-To isolate kernel syscall overhead from core data structure performance, Stage 12 introduces hardware-level micro-benchmarks built on Google Benchmark (`bench/`).
+To isolate kernel syscall overhead from core data structure performance, Stage 12 introduces hardware-level micro-benchmarks built on Google Benchmark (`benchmarks/`).
 
-### A. Dict Micro-Benchmarks (`bench/bench_dict.cpp`)
+### A. Dict Micro-Benchmarks (`benchmarks/bench_dict.cpp`)
 Measured on `Intel Core i7-12700H` (12 logical cores @ 2.3 GHz), Linux 6.6:
 
 | Benchmark Target | Parameters | Latency / Op | Throughput | Observation & Cache Impact |
@@ -162,7 +162,7 @@ Measured on `Intel Core i7-12700H` (12 logical cores @ 2.3 GHz), Linux 6.6:
 
 ---
 
-### B. RESP Protocol Serialization & Parser Micro-Benchmarks (`bench/bench_resp.cpp`)
+### B. RESP Protocol Serialization & Parser Micro-Benchmarks (`benchmarks/bench_resp.cpp`)
 
 | Benchmark Target | Payload Size | Parsing Latency | Throughput (QPS) | Network Wire Bandwidth |
 | :--- | :--- | :--- | :--- | :--- |
@@ -179,7 +179,7 @@ Measured on `Intel Core i7-12700H` (12 logical cores @ 2.3 GHz), Linux 6.6:
 
 ---
 
-### C. Skiplist & Encoding Conversion Micro-Benchmarks (`bench/bench_end_to_end.cpp`)
+### C. Skiplist & Encoding Conversion Micro-Benchmarks (`benchmarks/bench_end_to_end.cpp`)
 
 | Benchmark Target | Operation | Latency / Op | Items / sec | Analysis |
 | :--- | :--- | :--- | :--- | :--- |

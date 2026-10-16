@@ -1,0 +1,36 @@
+# ------------------------------------------------------------------------------
+# RedisX Studio API Gateway Container
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json ./
+COPY studio/gateway/package*.json ./studio/gateway/
+COPY packages ./packages
+
+RUN npm --prefix studio/gateway install
+
+COPY studio/gateway ./studio/gateway
+
+RUN npm --prefix studio/gateway run build
+
+# ------------------------------------------------------------------------------
+# Minimal Node Production Runner (Hardened Non-Root)
+# ------------------------------------------------------------------------------
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --chown=node:node package.json ./
+COPY --chown=node:node packages ./packages
+COPY --chown=node:node --from=builder /app/studio/gateway/node_modules ./studio/gateway/node_modules
+COPY --chown=node:node --from=builder /app/studio/gateway/dist ./studio/gateway/dist
+COPY --chown=node:node --from=builder /app/studio/gateway/package.json ./studio/gateway/package.json
+
+USER node
+
+EXPOSE 4000
+
+CMD ["node", "studio/gateway/dist/server.js"]

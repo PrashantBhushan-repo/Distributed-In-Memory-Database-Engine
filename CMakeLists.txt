@@ -31,6 +31,9 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wsign-conversion
         -Werror
     )
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        list(APPEND REDISX_WARN_FLAGS -Wno-restrict)
+    endif()
 endif()
 
 if (REDISX_ENABLE_SANITIZER_ADDRESS)
@@ -400,6 +403,11 @@ add_executable(loadgen
     tools/loadgen.cpp
 )
 
+target_include_directories(loadgen
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/benchmarks
+)
+
 target_link_libraries(loadgen
     PRIVATE
         redisx_bench_workloads
@@ -464,5 +472,7 @@ endif()
 # Micro-Benchmarks
 # ------------------------------------------------------------
 if (REDISX_BUILD_BENCHMARKS)
-    add_subdirectory(bench)
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/CMakeLists.txt")
+        add_subdirectory(benchmarks)
+    endif()
 endif()

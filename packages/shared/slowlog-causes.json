@@ -1,0 +1,74 @@
+[
+  {
+    "command": "KEYS",
+    "pattern": "^KEYS\\b",
+    "cause": "Scans the entire keyspace sequentially in O(N) time, blocking all client connections on the single-threaded event loop.",
+    "fix": "Replace with the non-blocking cursor-based SCAN command: SCAN 0 MATCH <pattern> COUNT 100",
+    "alternative": "SCAN 0 MATCH pattern COUNT 100",
+    "severity": "critical"
+  },
+  {
+    "command": "HGETALL",
+    "pattern": "^HGETALL\\b",
+    "cause": "Returns all fields and values of a hash in O(N) time. Large hashes consume massive network bandwidth and block reactor serialization.",
+    "fix": "Paginate large hashes using HSCAN, or fetch only required fields with HMGET / HGET.",
+    "alternative": "HSCAN key 0 COUNT 50",
+    "severity": "warning"
+  },
+  {
+    "command": "SMEMBERS",
+    "pattern": "^SMEMBERS\\b",
+    "cause": "Fetches all members of a set in O(N) time. When sets grow past thousands of members, this causes noticeable latency spikes.",
+    "fix": "Paginate set members iteratively using SSCAN, or check specific membership with SISMEMBER / SMISMEMBER.",
+    "alternative": "SSCAN key 0 COUNT 50",
+    "severity": "warning"
+  },
+  {
+    "command": "LRANGE",
+    "pattern": "^LRANGE\\b.*(-1|\\d{4,})",
+    "cause": "Traversing large lists from start to end in O(S+N) time causes high memory allocation and CPU overhead.",
+    "fix": "Paginate with smaller index windows (e.g. LRANGE key 0 49) or trim lists regularly with LTRIM.",
+    "alternative": "LRANGE key 0 49",
+    "severity": "warning"
+  },
+  {
+    "command": "SORT",
+    "pattern": "^SORT\\b",
+    "cause": "Sorts collection elements in memory with O(N+M*log(M)) complexity, which is heavily CPU-bound.",
+    "fix": "Pre-sort data on insertion into a Sorted Set (ZSET) and query instantaneously with ZRANGE.",
+    "alternative": "ZRANGE key 0 50 WITHSCORES",
+    "severity": "critical"
+  },
+  {
+    "command": "SUNION",
+    "pattern": "^(SUNION|SINTER|SDIFF)\\b",
+    "cause": "Computes set intersections, unions, or differences on the server over large collections, consuming significant CPU.",
+    "fix": "Cache results using SUNIONSTORE / SINTERSTORE, or compute unions in application memory.",
+    "alternative": "SUNIONSTORE destination key1 key2",
+    "severity": "warning"
+  },
+  {
+    "command": "DEL",
+    "pattern": "^DEL\\b",
+    "cause": "Synchronous deletion of large collections (hashes/sets/lists with > 10,000 items) blocks the main thread during jemalloc deallocation.",
+    "fix": "Use UNLINK to deallocate memory asynchronously in background IO worker threads.",
+    "alternative": "UNLINK key",
+    "severity": "critical"
+  },
+  {
+    "command": "FLUSHALL",
+    "pattern": "^(FLUSHALL|FLUSHDB)\\b",
+    "cause": "Synchronously frees all keys in memory, causing a multi-second latency freeze on large databases.",
+    "fix": "Always use asynchronous flushing: FLUSHALL ASYNC or FLUSHDB ASYNC.",
+    "alternative": "FLUSHALL ASYNC",
+    "severity": "critical"
+  },
+  {
+    "command": "MGET",
+    "pattern": "^(MGET|MSET)\\b",
+    "cause": "Batching hundreds of keys in a single multi-key command creates large payload packets and serialization delays.",
+    "fix": "Chunk multi-key commands into smaller batches of 50 to 100 keys.",
+    "alternative": "MGET k1 k2 ... k50",
+    "severity": "warning"
+  }
+]

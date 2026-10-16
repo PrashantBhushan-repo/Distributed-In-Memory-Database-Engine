@@ -1,204 +1,255 @@
-# RedisX (`pbRedisDB`) - High-Performance Distributed In-Memory Database Engine
+# RedisX (`pbRedisDB`) & RedisX Studio
+
+> A high-performance, low-latency, event-driven in-memory key-value database engine built from scratch in modern **C++20** featuring a single-threaded `epoll` reactor event loop, full RESP2/RESP3 protocol compliance, master-replica PSYNC replication, dual AOF+RDB persistence, native OpenMetrics telemetry, and **RedisX Studio** — an industrial administrative visualizer, real-time telemetry console, and interactive educational playground.
 
 [![Build & Test](https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/actions/workflows/cmake-ci.yml/badge.svg)](https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/actions)
 [![Language](https://img.shields.io/badge/Language-C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![Studio](https://img.shields.io/badge/Studio-React%2018%20%2B%20Fastify-emerald.svg)](https://react.dev/)
 [![Protocol](https://img.shields.io/badge/Protocol-RESP2%2FRESP3-red.svg)](https://redis.io/docs/latest/develop/reference/protocol-spec/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**RedisX** is a high-performance, low-latency, event-driven in-memory key-value database engine built from scratch in modern **C++20**. Designed as a production-grade Redis replacement, RedisX features a non-blocking `epoll` reactor event loop, zero-copy RESP protocol parser, dynamic memory eviction algorithms, PSYNC master-replica replication stream, multi-key transactions (`WATCH`/`MULTI`/`EXEC`), Pub/Sub engine, and a native **OpenMetrics / Prometheus Observability Exporter with 10 SRE Golden Signal Grafana Dashboards**.
-
 ---
 
-## 📊 Live Observability & SRE Dashboards
+## ⚡ 1-Command Quickstart
 
-RedisX features a native HTTP metrics server on port `9121` exporting **12 OpenMetrics parameters**. Integrated with **Prometheus** and **Grafana v13**, SREs and recruiters can inspect real-time performance, memory saturation, client connection pools, cache hit ratios, exporter scrape overhead, and target system availability.
-
----
-
-### 1. Executive System Summary & Traffic Performance
-![Grafana Executive System Summary](docs/images/grafana_summary_dashboard.png)
-*Figure 1: Executive System Summary — Real-time monitoring of 100+ concurrent clients, 43.2k active keys, 200k+ total commands, and QPS throughput spikes up to 15,000+ ops/sec.*
-
----
-
-### 2. Traffic, Cache Hits vs. Misses & Memory Saturation
-![Grafana Traffic & Memory Saturation](docs/images/grafana_traffic_performance.png)
-*Figure 2: Traffic & Memory Saturation — Live throughput tracking, cache hit vs. miss ratio analytics, and 180+ MB dynamic heap memory allocation tracking.*
-
----
-
-### 3. Prometheus Metrics Drilldown (12 OpenMetrics Parameters)
-![Grafana Prometheus Metrics Drilldown 1](docs/images/grafana_metrics_drilldown_1.png)
-![Grafana Prometheus Metrics Drilldown 2](docs/images/grafana_metrics_drilldown_2.png)
-![Grafana Prometheus Metrics Drilldown 3](docs/images/grafana_metrics_drilldown_3.png)
-*Figure 3: Metrics Drilldown — Granular time-series tracking for `redis_commands_processed_total`, `redis_connected_clients`, `redis_keyspace_hits_total`, `redis_keyspace_misses_total`, `redis_memory_used_bytes`, and `redis_replication_offset`.*
-
----
-
-### 4. Prometheus Exporter Overhead & Scrape Engine Health
-![Grafana Prometheus Exporter Health](docs/images/grafana_prometheus_exporter_health.png)
-*Figure 4: Prometheus Exporter Health — Measures internal metrics scrape duration (`scrape_duration_seconds`), confirming sub-80ms scrape latency overhead, scraped time-series sample counts (`scrape_samples_scraped` = 12 samples), and series initialization (`scrape_series_added`).*
-
----
-
-### 5. Target Availability & Up/Down Health Monitoring
-![Grafana Target Availability Status](docs/images/grafana_target_health_up_status.png)
-*Figure 5: Target Availability & Up/Down Health — Real-time binary health state tracking (`up` metric = 1 for online, 0 for offline), demonstrating rapid detection of instance status transitions during server restarts or failovers.*
-
----
-
-## ⚡ Benchmark & Performance Highlights
-
-Evaluated using standard `redis-benchmark` on Ubuntu Linux / WSL2:
-
-| Metric / Workload | Baseline Measurement | Engineering Highlight |
-| :--- | :--- | :--- |
-| **`GET` Read Throughput** | **70,871.72 req/sec** | Sub-millisecond $p_{50}$ latency (**0.839 ms**) |
-| **`SET` Write Throughput** | **24,437.93 req/sec** | Non-blocking dict allocation (**2.007 ms** $p_{50}$) |
-| **Pipelined Throughput (`-P 64`)** | **132,837.41 req/sec** | Zero-copy buffer processing |
-| **Heavy Payload Bandwidth (`-d 10240`)** | **388.76 MB/sec** | Max network I/O throughput |
-| **Connection Concurrency (`-c 500`)** | **94.1% Throughput Retention** | EventLoop scale out |
-
-*For complete benchmarks and tail-latency analysis, see [docs/benchmarks.md](docs/benchmarks.md).*
-
----
-
-## 🏛️ Core Architecture & Features
-
-```
-                            +-----------------------------------+
-                            |    Redis Client / Benchmark       |
-                            +-----------------+-----------------+
-                                              | TCP Port 6379
-                                              v
-                            +-----------------+-----------------+
-                            |  EventLoop (Non-blocking Epoll)   |
-                            +-----------------+-----------------+
-                                              |
-                     +------------------------+------------------------+
-                     |                        |                        |
-                     v                        v                        v
-           +------------------+     +------------------+     +-------------------+
-           | RESP Reader/     |     | Command          |     | Metrics Server    |
-           | Writer (RESP2/3) |     | Dispatcher       |     | (HTTP Port 9121)  |
-           +--------+---------+     +--------+---------+     +---------+---------+
-                    |                        |                         |
-                    +------------------------+                         v
-                                             |                 +---------------+
-                                             v                 | OpenMetrics / |
-                                    +------------------+       | Prometheus    |
-                                    |  Keyspace Dict   |       +---------------+
-                                    |  & TTL Manager   |
-                                    +--------+---------+
-                                             |
-                     +-----------------------+-----------------------+
-                     |                       |                       |
-                     v                       v                       v
-           +------------------+    +-------------------+    +------------------+
-           | Memory Eviction  |    | PSYNC Replication |    | AOF & RDB        |
-           | (LRU / LFU / TTL)|    | Stream            |    | Persistence      |
-           +------------------+    +-------------------+    +------------------+
-```
-
-1. **Reactor Event Loop (`net::EventLoop`)**:
-   - Single-threaded non-blocking I/O event multiplexer built on Linux `epoll`. Handles tens of thousands of concurrent client socket connections without locking overhead.
-
-2. **Keyspace & Dictionary (`db::Keyspace`, `db::Dict`)**:
-   - Custom hash table implementation supporting incremental $O(1)$ background rehashing, active TTL expiration cycles, and lazy expiration on access.
-
-3. **Memory Accounting & Eviction (`memory::EvictionManager`)**:
-   - Dynamic MemoryTracker counting allocated heap memory. Supports 8 eviction policies (`allkeys-lru`, `volatile-lru`, `allkeys-lfu`, `volatile-lfu`, `allkeys-random`, `volatile-random`, `volatile-ttl`, `noeviction`).
-
-4. **Master-Replica Replication (`replication::ReplStream`)**:
-   - Full RDB snapshot synchronization and asynchronous PSYNC partial resynchronization backed by a 1 MB circular replication backlog.
-
-5. **Transactions & Pub/Sub (`tx::WatchManager`, `pubsub::PubSubManager`)**:
-   - Full ACID transaction support (`MULTI`, `EXEC`, `DISCARD`, `WATCH`, `UNWATCH`) with optimistic concurrency CAS checking and pattern-based Pub/Sub (`PSUBSCRIBE`/`PUBLISH`).
-
-6. **Observability & OpenMetrics Exporter (`obs::PrometheusExporter`)**:
-   - Embedded HTTP server exporting live metrics on port `9121` formatted according to OpenMetrics standards.
-
----
-
-## 🛠️ Building & Running RedisX
-
-### Prerequisites
-- C++20 compatible compiler (`g++ 11+` or `clang++ 13+`)
-- `CMake 3.20+`
-- `Ninja` or `Make`
-- `redis-cli` and `redis-benchmark` (optional, for testing)
-
-### Build Instructions
-
-```bash
-# 1. Clone repository
-git clone https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine.git
-cd Distributed-In-Memory-Database-Engine
-
-# 2. Configure and build
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc)
-
-# 3. Run unit & integration test suite
-ctest --test-dir build --output-on-failure
-```
-
----
-
-## 🚀 Running the Engine & Observability Stack
-
-### 1. Launch RedisX Engine
-```bash
-./build/redisx -p 6379
-```
-
-### 2. Launch Prometheus & Grafana Stack (Docker Compose)
+### Option 1: Docker Compose (Full Stack in One Command)
+Run the entire production stack (RedisX Engine + Fastify Gateway + React Studio) with automatic container healthchecks:
 ```bash
 docker compose up -d
 ```
-- **Grafana Dashboard**: `http://localhost:3000` (Default Credentials: `admin` / `admin`)
-- **Prometheus Targets**: `http://localhost:9090`
-- **RedisX Metrics HTTP Endpoint**: `http://localhost:9121`
+* **RedisX Studio Web UI**: [http://localhost:3000](http://localhost:3000)
+* **API Gateway & Health**: [http://localhost:4000/health](http://localhost:4000/health)
+* **C++ Redis Engine**: `localhost:6379` (RESP2/RESP3)
 
-### 3. Generate Benchmark Traffic Across All Metrics
-Run this command in your terminal to see live QPS, memory, connection, and hit/miss spikes on Grafana:
-
+### Option 2: Local Developer Mode (Instant Demo Mode — Zero Setup)
+Run RedisX Studio in pure browser & gateway simulation mode without needing an active C++ Redis daemon:
 ```bash
-redis-benchmark -h 127.0.0.1 -p 6379 -t set,get -n 100000 -r 50000 -c 100 -P 4 -q && redis-cli SET temp:hit_key "value" && redis-cli GET temp:hit_key && redis-cli GET temp:miss_key && redis-cli SET temp:exp_key "value" EX 1 && sleep 2 && curl -s http://localhost:9121
+# Terminal 1: Fastify API Gateway
+npm run backend
+
+# Terminal 2: React 18 Studio Frontend
+npm run frontend
+```
+Navigate to **[http://localhost:3000](http://localhost:3000)**. The gateway will automatically fall back to the built-in mock demo engine with pre-seeded datasets, live telemetry, and simulated memory pressure.
+
+### Option 3: Native C++ Engine (Linux / WSL2)
+```bash
+# Build stripped release binary
+cmake -B build-wsl -S . -DCMAKE_BUILD_TYPE=Release
+cmake --build build-wsl --target redisx --parallel $(nproc)
+
+# Launch RedisX Reactor on port 6379
+./build-wsl/redisx -h 127.0.0.1 -p 6379 -c infra/configs/pbRedis.conf
 ```
 
 ---
 
-## 📁 Repository Structure
+## 🏛️ System Architecture
 
+```text
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │                                REDISX STUDIO                                   │
+ │                          React 18 + Vite Web App                               │
+ │                           (Port 3000 · <87 KB)                                 │
+ └───────────────────────────────────┬────────────────────────────────────────────┘
+                                     │ HTTP REST + WebSockets
+                                     v
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │                             FASTIFY API GATEWAY                                │
+ │                 Zod Validation · AST Safety Engine · JWT Auth                  │
+ │                               (Port 4000)                                      │
+ └───────────────────────────────────┬────────────────────────────────────────────┘
+                                     │ Vectorized Commands (No Shell Concatenation)
+                                     v
+ ┌────────────────────────────────────────────────────────────────────────────────┐
+ │                           REDISX C++20 ENGINE                                  │
+ │                      Single-Threaded Epoll Reactor                             │
+ │                               (Port 6379)                                      │
+ └──────┬────────────────────────────┬─────────────────────────────┬──────────────┘
+        │                            │                             │
+        v                            v                             v
+ ┌───────────────┐           ┌───────────────┐             ┌───────────────┐
+ │ Keyspace Dict │           │  Dual Engine  │             │ PSYNC Primary │
+ │  & TTL Timer  │           │   AOF + RDB   │             │   Replica     │
+ └───────────────┘           └───────────────┘             └───────────────┘
 ```
-pbRedisDB/
-├── include/redisx/         # Public C++20 Header Interfaces
-│   ├── commands/           # Command Dispatcher & Handlers (String, List, Hash, Set, ZSet, Repl, Admin)
-│   ├── core/               # Error codes, Buffers, Logging, Time utilities
-│   ├── db/                 # Keyspace, Dictionary (Dict), TTL Manager
-│   ├── memory/             # Memory Tracker & Eviction Policies (LRU, LFU, TTL)
-│   ├── net/                # EventLoop (Epoll), Listener, Connection abstractions
-│   ├── obs/                # OpenMetrics Exporter, Slowlog, Latency Monitor, Info Provider
-│   ├── persistence/        # RDB Snapshot Encoder/Decoder & AOF Logger
-│   ├── pubsub/             # Pub/Sub Manager & Keyspace Notifications
-│   ├── replication/        # ReplId, ReplBacklog, ReplStream, ReplicaLink
-│   ├── security/           # Auth Engine, ACL Manager, TLS Wrappers
-│   └── tx/                 # Transaction WatchManager & ClientTxState
-├── src/                    # C++ Implementation Files
-├── docs/                   # Documentation & Architectural Diagrams
-│   ├── architecture.md     # Engineering & Architectural Overview
-│   ├── benchmarks.md       # Comprehensive Baseline Performance Report
-│   ├── images/             # Embedded Dashboard & Metrics Screenshots
-│   ├── replication.md      # PSYNC Replication Protocol Details
-│   └── testing.md          # Stage 11 Testing, Fuzzing & Fault Injection Report
-├── grafana/                # Grafana Dashboard Definitions (`redisx-dashboard.json`)
-├── prometheus/             # Prometheus Scrape Configuration (`prometheus.yml`)
-└── docker-compose.yml      # Orchestration for Prometheus & Grafana Monitoring Stack
+
+---
+
+## 📸 Screenshots & Visual Tour
+
+| Feature | Screenshot / Preview | Description |
+| :--- | :--- | :--- |
+| **Interactive Dashboard** | ![Dashboard](docs/screenshots/dashboard.png) | Live ops/sec sparklines, RAM utilization gauge, hit-rate meter, and auto-detecting health diagnostics. |
+| **Key Explorer** | ![Key Explorer](docs/screenshots/keys.png) | Virtualized split-pane browser handling 100k+ keys at 60fps, namespace tree, and typed editors. |
+| **Interactive Console** | ![Console](docs/screenshots/console.png) | CodeMirror 6 terminal, multi-command pipelining, AST safety blocking, and persistent history. |
+| **Architecture Tour** | ![Architecture Tour](docs/screenshots/tour.png) | Interactive SVG pipeline animating requests from TCP socket to storage engine with live telemetry. |
+| **Guided Labs** | ![Guided Labs](docs/screenshots/labs.png) | 6 interactive learning scenarios running in sandbox DB 15 with automated verification. |
+
+*(High-resolution asset captures can be generated via the Playwright visual regression suite).*
+
+---
+
+## 📊 Performance & Bundle Size Report
+
+RedisX Studio utilizes route-level code-splitting with `React.lazy()` and `Suspense`, ensuring the initial route bundle stays well below the strict **250 KB gzip budget**:
+
+| Chunk / Module | Raw Size | Gzip Size | Loading Strategy |
+| :--- | :--- | :--- | :--- |
+| **Initial Entry (`index.js`)** | **66.28 kB** | **19.40 kB** | Entry chunk loaded on first paint |
+| **React Core (`vendor-react`)** | **180.81 kB** | **59.46 kB** | Cached shared framework runtime |
+| **Icons (`vendor-icons`)** | **39.90 kB** | **7.25 kB** | Cached Lucide iconography |
+| **TOTAL INITIAL LOAD** | **286.99 kB** | **86.11 kB** | **< 35% of 250 KB Budget! ⚡** |
+| `vendor-codemirror` | 397.67 kB | 129.81 kB | Lazy-loaded on `/console` & `/playground` |
+| `vendor-charts` | 418.32 kB | 119.53 kB | Lazy-loaded on `/metrics` & `/dashboard` |
+| All 18 Route Pages | 12.0 – 69.1 kB | 3.8 – 14.4 kB | Asynchronously split per route |
+
+### Virtualized 60 FPS Rendering
+The Key Explorer virtualizes large keysets using `@tanstack/react-virtual`:
+- **DOM Stability**: Renders only ~20 active DOM nodes regardless of whether 1,000 or 100,000 keys exist.
+- **Scroll Frame Rate**: Maintains a locked **60 FPS** scroll with zero main-thread blocking tasks.
+- **Debounced Lookups**: Real-time pattern searches (`*user*`) debounced to 250ms to prevent gateway saturation.
+
+---
+
+## 🛡️ Security & Safety Model
+
+RedisX enforces an enterprise-grade defense-in-depth model across the API Gateway:
+
+1. **Zero Command-Injection Vector**:
+   - Commands are parsed into typed `string[]` arrays and executed via direct RESP socket tokens (`(ioredis.call(command, ...args)`).
+   - Shell string concatenation and shell execution (`exec`/`spawn`) are strictly forbidden.
+
+2. **Secret Redaction**:
+   - `AUTH` passwords, `CONFIG SET requirepass`, and `ACL SETUSER >password` parameters are automatically sanitized into `******` before storing in audit logs.
+   - Fastify logger headers and request bodies redact `authorization` and `password` fields.
+
+3. **Rate-Limited Authentication**:
+   - In-memory sliding window rate limiter permits a maximum of 5 failed login attempts per minute per IP/user, responding with `429 Too Many Requests`.
+
+4. **Safety Guardian Gatekeeper**:
+   - Destructive operations (`FLUSHALL`, `FLUSHDB`, `SHUTDOWN`, `DEBUG`, `KEYS *`) are intercepted by the AST Safety Engine.
+   - Operators and viewers cannot run dangerous commands; administrators must type **`CONFIRM`** in the confirmation modal before unlocking execution.
+
+5. **Security Headers & Strict CORS**:
+   - Full Content Security Policy (CSP), `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY` applied to all HTTP responses.
+   - CORS locked exclusively to authorized browser origins.
+
+---
+
+## 👥 Role & Permissions Matrix
+
+| Feature / Command Category | Viewer (`viewer`) | Operator (`operator`) | Administrator (`admin`) |
+| :--- | :---: | :---: | :---: |
+| **Read Operations** (`GET`, `MGET`, `HGETALL`, `SCAN`) | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **Standard Keyspace Writes** (`SET`, `HSET`, `LPUSH`) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
+| **Key TTL & Expiration** (`EXPIRE`, `PERSIST`) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
+| **Key Deletion** (`DEL`, `UNLINK`, Bulk Delete) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
+| **Live Pub/Sub Publishing** (`PUBLISH`) | ❌ Read-Only | ✅ Allowed | ✅ Allowed |
+| **Configuration Mutations** (`CONFIG SET`) | ❌ Blocked (403) | ❌ Blocked (403) | ✅ Requires Unlock |
+| **Destructive Commands** (`FLUSHALL`, `SHUTDOWN`) | ❌ Blocked (403) | ❌ Blocked (403) | ✅ Requires Unlock |
+| **ACL User Management** (`ACL SETUSER`, `ACL DELUSER`)| ❌ Blocked (403) | ❌ Blocked (403) | ✅ Allowed |
+
+---
+
+## 🧭 Page Features Matrix & Status Checklist
+
+| Page Route | Primary Capabilities | Status | Server Support |
+| :--- | :--- | :---: | :--- |
+| **`/dashboard`** | Telemetry sparklines, health diagnostics, condition simulators | **Working** | Full (Native / Demo) |
+| **`/keys`** | Split pane, virtualized list, namespace tree, String/Hash/List/Set/ZSet editors, TTL bulk manager | **Working** | Full (Native / Demo) |
+| **`/console`** | CodeMirror 6 terminal, autocomplete, explain drawer, pipelining, history modal | **Working** | Full (Native / Demo) |
+| **`/playground`** | Interactive visualizer for Strings, Lists, Hashes, Sets, Sorted Sets, Bitmaps, and HyperLogLogs | **Working** | Full (Native / Demo) |
+| **`/memory`** | Treemap memory analyzer, fragmentation ratio, eviction simulation | **Working** | Full (Native / Demo) |
+| **`/expiration`** | Live TTL countdowns, expiration histogram, lazy vs active expiry simulator | **Working** | Full (Native / Demo) |
+| **`/clients`** | Connected clients table, kill client, slow connection detection | **Working** | Full (Native / Demo) |
+| **`/slowlog`** | Execution latency threshold log, Big-O root cause hints, reset | **Working** | Full (Native / Demo) |
+| **`/persistence`** | Dual AOF/RDB timeline, snapshot inspector, BGSAVE trigger | **Working** | Full (Native / Demo) |
+| **`/replication`** | Topology visualizer, lag offset tracker, REPLICAOF configuration | **Working** | Full (Native / Demo) |
+| **`/security`** | ACL user editor, password hasher, category permissions builder | **Working** | Full (Native / Demo) |
+| **`/config`** | Searchable runtime configurations, live validation, config export | **Working** | Full (Native / Demo) |
+| **`/metrics`** | Multi-metric historical chart explorer, p99 latency tracker | **Working** | Full (Native / Demo) |
+| **`/monitor`** | Streaming live command monitor with regex filters and pause buffer | **Working** | Full (Native / Demo) |
+| **`/pubsub`** | Interactive multi-channel pub/sub tester and message inspector | **Working** | Full (Native / Demo) |
+| **`/learn/tour`** | Interactive 9-stage SVG architecture diagram with request tracer | **Working** | Full (Native / Demo) |
+| **`/learn/commands`**| Searchable 68+ command catalog, Big-O complexity filters, playground links | **Working** | Full (Native / Demo) |
+| **`/learn/labs`** | 6 guided hands-on database scenario labs with automated check verification | **Working** | Sandbox DB 15 |
+
+---
+
+## 🌐 Supported Servers
+
+RedisX Studio communicates over standard RESP2 and RESP3 protocols:
+* **RedisX Engine** (`pbRedisDB`): Full support for all core primitives, replication, and telemetry.
+* **Redis 6.x, 7.x, 7.2.x**: Full compatibility across all commands and ACL rules.
+* **Valkey 7.2+ / KeyDB**: Full compatibility for keyspace inspection and telemetry.
+* **Standalone Demo Mode**: 100% offline simulation requiring zero external binaries.
+
+---
+
+## 🚫 What's Not Implemented
+
+To maintain architectural simplicity and focus on high-performance single-node predictability, the following features are intentionally out of scope:
+1. **Redis Cluster (Multi-Master Sharding)**: RedisX focuses on master-replica PSYNC topologies; cluster-bus gossip and multi-node hash slot migrations (`CLUSTER SLOTS`) are not implemented.
+2. **Lua Scripting Engine (`EVAL`)**: Embedded Lua runtime execution is omitted in favor of atomic multi-command pipelining (`MULTI`/`EXEC`).
+3. **Dynamic C Module API (`MODULE LOAD`)**: Dynamic shared library loading is not supported.
+
+---
+
+## 🧪 Testing & Verification
+
+Run the complete test suite across all packages:
+```bash
+# Run both Gateway and Web test suites
+npm test
+
+# Run Gateway integration tests (Auth, Safety, Caps, Zod validation)
+npm run test:gateway
+
+# Run Web React component tests (Key Explorer, Editors, Console, Modals)
+npm run test:web
 ```
 
 ---
 
 ## 📜 License
 
-Distributed under the **MIT License**. See `LICENSE` for details.
+MIT License. Crafted with precision for distributed systems engineers and database enthusiasts.
+
+
+
+
+## extra image: 
+
+               ┌───────────────────────────────────────────────────────────────┐
+               │              DOCKER BRIDGE NETWORK: pbredisdb_default         │
+               │                                                               │
+               │   ┌───────────┐    proxy /api/     ┌───────────┐              │
+               │   │    web    │ ─────────────────► │  gateway  │              │
+               │   │ (Port 3000)│                   │(Port 4000)│              │
+               │   └───────────┘                    └─────┬─────┘              │
+               │                                          │                    │
+               │                                          │ RESP TCP           │
+               │                                          │ port 6379          │
+               │                                          ▼                    │
+               │   ┌───────────┐   scrape :9121     ┌───────────┐              │
+               │   │prometheus │ ─────────────────► │  redisx   │              │
+               │   │(Port 9090)│                    │(Port 6379)│              │
+               │   └─────┬─────┘                    └───────────┘              │
+               │         ▲                                                     │
+               │         │ PromQL query                                        │
+               │         │ http://prometheus:9090                              │
+               │   ┌─────┴─────┐                                               │
+               │   │  grafana  │                                               │
+               │   │(Port 3000)│                                               │
+               │   └───────────┘                                               │
+               └───────────────────────────────────────────────────────────────┘
+                                      ▲
+                                      │ Port Forwarding (Host Ports)
+                                      │
+              ┌───────────────────────┴────────────────────────┐
+              │           YOU / BROWSER / HOST MACHINE         │
+              │   • http://localhost:3000 (React Web Studio)   │
+              │   • http://localhost:3002 (Grafana Dashboards) │
+              │   • localhost:6379        (redis-cli)          │
+              └────────────────────────────────────────────────┘

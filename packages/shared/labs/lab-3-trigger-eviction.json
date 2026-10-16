@@ -1,0 +1,41 @@
+{
+  "id": "lab-3-trigger-eviction",
+  "title": "Trigger an eviction & explore memory limits",
+  "summary": "Understand how Redis evaluates maxmemory limits, sample-based eviction algorithms (allkeys-lru, volatile-ttl), and memory fragmentation.",
+  "category": "Memory",
+  "estimatedMinutes": 6,
+  "requiredCommands": ["INFO", "MSET", "CONFIG", "EXISTS"],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Inspect memory allocation metrics",
+      "explanation": "Query INFO memory to view used_memory, maxmemory limits, and the currently active maxmemory-policy. Redis samples 5 keys per cycle to approximate LRU/LFU without global locks.",
+      "command": "INFO memory",
+      "expectedCheck": {
+        "type": "command_success"
+      },
+      "hint": "Run: INFO memory"
+    },
+    {
+      "id": "step-2",
+      "title": "Populate cache candidate keys",
+      "explanation": "Insert multiple candidate cache keys using MSET with the play: prefix. Each key allocates an internal dictEntry and sds value in the allocator.",
+      "command": "MSET play:cache:k1 \"val1\" play:cache:k2 \"val2\" play:cache:k3 \"val3\" play:cache:k4 \"val4\"",
+      "expectedCheck": {
+        "type": "key_exists",
+        "key": "play:cache:k1"
+      },
+      "hint": "Run: MSET play:cache:k1 \"val1\" play:cache:k2 \"val2\" play:cache:k3 \"val3\" play:cache:k4 \"val4\""
+    },
+    {
+      "id": "step-3",
+      "title": "Simulate memory pressure & check eviction policy",
+      "explanation": "Inspect the maxmemory-policy setting using CONFIG GET maxmemory-policy. Under policies like allkeys-lru or volatile-ttl, Redis evicts the oldest untouched candidates.",
+      "command": "CONFIG GET maxmemory-policy",
+      "expectedCheck": {
+        "type": "command_success"
+      },
+      "hint": "Run: CONFIG GET maxmemory-policy"
+    }
+  ]
+}

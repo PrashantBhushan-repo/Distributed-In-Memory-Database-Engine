@@ -1,0 +1,46 @@
+{
+  "id": "lab-5-data-types",
+  "title": "Lists vs Sets vs Sorted Sets — Pick the Right Type",
+  "summary": "Compare FIFO List queues, unique Set collections, and prioritized Sorted Set leaderboards, observing their underlying physical encodings.",
+  "category": "Data Structures",
+  "estimatedMinutes": 8,
+  "requiredCommands": ["RPUSH", "LPOP", "LLEN", "SADD", "SMEMBERS", "ZADD", "ZREVRANGE"],
+  "steps": [
+    {
+      "id": "step-1",
+      "title": "Build a FIFO queue with List (RPUSH / LPOP)",
+      "explanation": "Redis lists are doubly-linked quicklists of listpack nodes. RPUSH appends to the tail ($O(1)$) and LPOP removes from the head ($O(1)$), making lists ideal for job queues.",
+      "command": "RPUSH play:queue:jobs \"job_render\" \"job_encode\" \"job_notify\"",
+      "expectedCheck": {
+        "type": "key_type",
+        "key": "play:queue:jobs",
+        "expectedType": "list"
+      },
+      "hint": "Run: RPUSH play:queue:jobs \"job_render\" \"job_encode\" \"job_notify\""
+    },
+    {
+      "id": "step-2",
+      "title": "Enforce uniqueness with Set (SADD)",
+      "explanation": "Redis sets store unordered unique members using an intset (for pure integers) or a hash table. SADD ignores duplicate entries automatically.",
+      "command": "SADD play:tags:sys \"networking\" \"c++20\" \"reactor\" \"networking\"",
+      "expectedCheck": {
+        "type": "key_type",
+        "key": "play:tags:sys",
+        "expectedType": "set"
+      },
+      "hint": "Run: SADD play:tags:sys \"networking\" \"c++20\" \"reactor\" \"networking\""
+    },
+    {
+      "id": "step-3",
+      "title": "Rank elements by score with Sorted Set (ZADD / ZREVRANGE)",
+      "explanation": "Sorted Sets pair every member with a floating-point score using a dual hash table + skiplist data structure. Traverse ranks in O(log N + M) time.",
+      "command": "ZADD play:ranks 1500 \"alice\" 2400 \"bob\" 1850 \"charlie\"",
+      "expectedCheck": {
+        "type": "key_type",
+        "key": "play:ranks",
+        "expectedType": "zset"
+      },
+      "hint": "Run: ZADD play:ranks 1500 \"alice\" 2400 \"bob\" 1850 \"charlie\""
+    }
+  ]
+}
