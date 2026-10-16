@@ -1,5 +1,5 @@
 #include <benchmark/benchmark.h>
-#include "bench/workloads.h"
+#include "workloads.h"
 #include "redisx/types/intset.h"
 #include "redisx/types/listpack.h"
 #include "redisx/types/quicklist.h"

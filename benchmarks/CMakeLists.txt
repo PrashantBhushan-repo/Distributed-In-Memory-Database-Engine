@@ -19,6 +19,7 @@ add_library(redisx_bench_workloads
 
 target_include_directories(redisx_bench_workloads
     PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
         ${PROJECT_SOURCE_DIR}
         ${PROJECT_SOURCE_DIR}/include
 )
@@ -32,6 +33,11 @@ endif()
 # ------------------------------------------------------------
 add_executable(bench_dict
     bench_dict.cpp
+)
+
+target_include_directories(bench_dict
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(bench_dict
@@ -50,6 +56,11 @@ add_executable(bench_resp
     bench_resp.cpp
 )
 
+target_include_directories(bench_resp
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 target_link_libraries(bench_resp
     PRIVATE
         redisx_proto
@@ -63,6 +74,11 @@ endif()
 
 add_executable(bench_end_to_end
     bench_end_to_end.cpp
+)
+
+target_include_directories(bench_end_to_end
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(bench_end_to_end

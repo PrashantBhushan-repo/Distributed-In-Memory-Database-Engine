@@ -403,6 +403,11 @@ add_executable(loadgen
     tools/loadgen.cpp
 )
 
+target_include_directories(loadgen
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/benchmarks
+)
+
 target_link_libraries(loadgen
     PRIVATE
         redisx_bench_workloads

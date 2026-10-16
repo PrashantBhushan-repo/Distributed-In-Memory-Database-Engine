@@ -1,4 +1,4 @@
-#include "bench/workloads.h"
+#include "workloads.h"
 
 #include <cmath>
 #include <sstream>
