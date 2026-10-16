@@ -10,6 +10,7 @@ COPY studio/web/package*.json ./studio/web/
 
 RUN npm --prefix studio/web install --legacy-peer-deps
 
+COPY packages ./packages
 COPY studio/web ./studio/web
 
 RUN npm --prefix studio/web run build
