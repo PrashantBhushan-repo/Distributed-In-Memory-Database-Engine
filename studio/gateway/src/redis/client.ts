@@ -91,6 +91,7 @@ export class RedisGatewayClient {
       this.initDemoCapabilities();
     } else {
       this.connect();
+      this.startReconnectHeartbeat();
     }
   }
 
@@ -107,8 +108,18 @@ export class RedisGatewayClient {
     this.capabilities = new Set(defaultCaps);
   }
 
+  private isConnecting = false;
+
   private connect() {
+    if (this.isConnecting) return;
+    this.isConnecting = true;
+
     try {
+      if (this.redis) {
+        try { this.redis.disconnect(false); } catch {}
+        this.redis = null;
+      }
+
       this.status = 'connecting';
       this.redis = new Redis({
         host: this.host,
@@ -118,21 +129,32 @@ export class RedisGatewayClient {
         maxRetriesPerRequest: 1,
         lazyConnect: true,
         retryStrategy: (times: number) => {
-          if (times > 3) {
-            // Fallback to demo mode if Redis is not running locally
-            if (process.env.DEMO_FALLBACK !== 'false') {
-              this.status = 'demo';
-              this.initDemoCapabilities();
-            }
-            return null; // Stop infinite reconnect loop
+          if (this.status !== 'demo' && process.env.DEMO_FALLBACK !== 'false') {
+            this.status = 'demo';
+            this.initDemoCapabilities();
           }
-          return Math.min(times * 200, 1000);
+          return Math.min(times * 300, 3000);
         },
       });
 
       this.redis.on('connect', async () => {
         this.status = 'connected';
+        this.lastError = undefined;
+        this.isConnecting = false;
         await this.probeCapabilities();
+      });
+
+      this.redis.on('ready', () => {
+        this.status = 'connected';
+        this.lastError = undefined;
+        this.isConnecting = false;
+      });
+
+      this.redis.on('close', () => {
+        if (process.env.DEMO_FALLBACK !== 'false') {
+          this.status = 'demo';
+          this.initDemoCapabilities();
+        }
       });
 
       this.redis.on('error', (err: any) => {
@@ -145,14 +167,31 @@ export class RedisGatewayClient {
 
       this.redis.connect().catch((err: any) => {
         this.lastError = err.message;
-        this.status = 'demo';
-        this.initDemoCapabilities();
+        if (process.env.DEMO_FALLBACK !== 'false') {
+          this.status = 'demo';
+          this.initDemoCapabilities();
+        }
+        this.isConnecting = false;
       });
     } catch (err: any) {
       this.lastError = err.message;
-      this.status = 'demo';
-      this.initDemoCapabilities();
+      if (process.env.DEMO_FALLBACK !== 'false') {
+        this.status = 'demo';
+        this.initDemoCapabilities();
+      }
+      this.isConnecting = false;
     }
+  }
+
+  private startReconnectHeartbeat() {
+    setInterval(() => {
+      if (this.status === 'connected') {
+        return;
+      }
+      if (!this.redis || this.redis.status === 'end' || this.redis.status === 'close' || this.redis.status === 'wait') {
+        this.connect();
+      }
+    }, 3000);
   }
 
   private async probeCapabilities() {

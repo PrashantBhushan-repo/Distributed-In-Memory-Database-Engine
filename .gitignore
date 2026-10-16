@@ -61,3 +61,13 @@ logs/
 # Temporary files
 *.tmp
 *.swp
+
+# Credentials & Keys (Never commit private keys!)
+*.pem
+*.key
+*.cer
+*.crt
+id_rsa*
+.env
+.env.local
+.env.*.local

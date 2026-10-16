@@ -215,3 +215,41 @@ npm run test:web
 ## 📜 License
 
 MIT License. Crafted with precision for distributed systems engineers and database enthusiasts.
+
+
+
+
+## extra image: 
+
+               ┌───────────────────────────────────────────────────────────────┐
+               │              DOCKER BRIDGE NETWORK: pbredisdb_default         │
+               │                                                               │
+               │   ┌───────────┐    proxy /api/     ┌───────────┐              │
+               │   │    web    │ ─────────────────► │  gateway  │              │
+               │   │ (Port 3000)│                   │(Port 4000)│              │
+               │   └───────────┘                    └─────┬─────┘              │
+               │                                          │                    │
+               │                                          │ RESP TCP           │
+               │                                          │ port 6379          │
+               │                                          ▼                    │
+               │   ┌───────────┐   scrape :9121     ┌───────────┐              │
+               │   │prometheus │ ─────────────────► │  redisx   │              │
+               │   │(Port 9090)│                    │(Port 6379)│              │
+               │   └─────┬─────┘                    └───────────┘              │
+               │         ▲                                                     │
+               │         │ PromQL query                                        │
+               │         │ http://prometheus:9090                              │
+               │   ┌─────┴─────┐                                               │
+               │   │  grafana  │                                               │
+               │   │(Port 3000)│                                               │
+               │   └───────────┘                                               │
+               └───────────────────────────────────────────────────────────────┘
+                                      ▲
+                                      │ Port Forwarding (Host Ports)
+                                      │
+              ┌───────────────────────┴────────────────────────┐
+              │           YOU / BROWSER / HOST MACHINE         │
+              │   • http://localhost:3000 (React Web Studio)   │
+              │   • http://localhost:3002 (Grafana Dashboards) │
+              │   • localhost:6379        (redis-cli)          │
+              └────────────────────────────────────────────────┘

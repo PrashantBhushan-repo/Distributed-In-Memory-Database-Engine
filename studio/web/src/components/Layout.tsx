@@ -178,24 +178,30 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   // Fetch capabilities & telemetry
   useEffect(() => {
-    fetch('/health')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.redis) {
-          setTelemetry((prev) => ({
-            ...prev,
-            status: data.redis.status,
-            isDemo: data.redis.isDemo,
-            latencyMs: data.redis.latencyMs || 0.8,
-          }));
-          if (Array.isArray(data.redis.capabilities)) {
-            setCapabilities(new Set(data.redis.capabilities));
+    const updateHealth = () => {
+      fetch('/health')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.redis) {
+            setTelemetry((prev) => ({
+              ...prev,
+              status: data.redis.status,
+              isDemo: data.redis.isDemo,
+              latencyMs: data.redis.latencyMs || 0.8,
+            }));
+            if (Array.isArray(data.redis.capabilities)) {
+              setCapabilities(new Set(data.redis.capabilities));
+            }
           }
-        }
-      })
-      .catch(() => {
-        // demo fallback
-      });
+        })
+        .catch(() => {
+          // demo fallback
+        });
+    };
+
+    updateHealth();
+    const interval = setInterval(updateHealth, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const getStatusInfo = () => {
