@@ -31,6 +31,9 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         -Wsign-conversion
         -Werror
     )
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        list(APPEND REDISX_WARN_FLAGS -Wno-restrict)
+    endif()
 endif()
 
 if (REDISX_ENABLE_SANITIZER_ADDRESS)

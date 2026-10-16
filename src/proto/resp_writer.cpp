@@ -1,8 +1,18 @@
 #include "redisx/proto/resp_writer.h"
 
-#include <string>
+#include <cinttypes>
+#include <cstdio>
+#include <string_view>
 
 namespace redisx::proto {
+
+static inline void append_formatted_header(core::Buffer &buf, const char *fmt, long long value) {
+    char header[64];
+    int n = std::snprintf(header, sizeof(header), fmt, value);
+    if (n > 0) {
+        buf.append(header, static_cast<size_t>(n));
+    }
+}
 
 void RespWriter::write_simple_string(core::Buffer &buf, std::string_view str) {
     buf.append("+");
@@ -17,14 +27,14 @@ void RespWriter::write_error(core::Buffer &buf, std::string_view err) {
 }
 
 void RespWriter::write_integer(core::Buffer &buf, std::int64_t val) {
-    std::string s = ":" + std::to_string(val) + "\r\n";
-    buf.append(s.data(), s.size());
+    append_formatted_header(buf, ":%lld\r\n", static_cast<long long>(val));
 }
 
 void RespWriter::write_bulk_string(core::Buffer &buf, std::string_view str) {
-    std::string header = "$" + std::to_string(str.size()) + "\r\n";
-    buf.append(header.data(), header.size());
-    buf.append(str.data(), str.size());
+    append_formatted_header(buf, "$%lld\r\n", static_cast<long long>(str.size()));
+    if (!str.empty()) {
+        buf.append(str.data(), str.size());
+    }
     buf.append("\r\n");
 }
 
@@ -37,8 +47,7 @@ void RespWriter::write_null_array(core::Buffer &buf) {
 }
 
 void RespWriter::write_array_header(core::Buffer &buf, std::size_t count) {
-    std::string header = "*" + std::to_string(count) + "\r\n";
-    buf.append(header.data(), header.size());
+    append_formatted_header(buf, "*%lld\r\n", static_cast<long long>(count));
 }
 
 void RespWriter::write_string_array(core::Buffer &buf, const std::vector<std::string> &arr) {
