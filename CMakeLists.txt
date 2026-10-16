@@ -467,5 +467,7 @@ endif()
 # Micro-Benchmarks
 # ------------------------------------------------------------
 if (REDISX_BUILD_BENCHMARKS)
-    add_subdirectory(benchmarks)
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/CMakeLists.txt")
+        add_subdirectory(benchmarks)
+    endif()
 endif()

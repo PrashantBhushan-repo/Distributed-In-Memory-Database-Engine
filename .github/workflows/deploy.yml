@@ -23,10 +23,37 @@ env:
 
 jobs:
   # ============================================================================
-  # 1. CI: Build Docker Images on GitHub Actions & Push to GitHub Packages (GHCR)
+  # 1. CI Quality Gate: Run Automated Tests First (Never deploy broken code!)
+  # ============================================================================
+  test:
+    name: Run Automated Tests & Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install C++ Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++-12
+
+      - name: Configure CMake (Debug)
+        run: cmake --preset debug
+
+      - name: Build Engine & Test Suite
+        run: cmake --build --preset debug
+
+      - name: Run C++ Unit Tests
+        run: ctest --preset debug --output-on-failure --timeout 30
+
+  # ============================================================================
+  # 2. CI: Build Docker Images on GitHub Actions & Push to GHCR (Runs ONLY if tests pass!)
   # ============================================================================
   build-and-push:
     name: Build & Push Images (GHCR)
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -46,6 +73,7 @@ jobs:
 
       # 1. Build C++ Engine
       - name: Build & Push RedisX C++ Engine
+      # 1. Build C++ Engine
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -84,7 +112,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   # ============================================================================
-  # 2. CD: SSH to EC2, Pull Pre-Built Images & Run with Docker Compose
+  # 3. CD: SSH to EC2, Pull Pre-Built Images & Run with Docker Compose
   # ============================================================================
   deploy:
     name: Deploy to EC2
