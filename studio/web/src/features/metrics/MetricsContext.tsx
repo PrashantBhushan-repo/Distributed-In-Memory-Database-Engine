@@ -12,20 +12,20 @@ interface MetricsContextType {
 
 const DEFAULT_SAMPLE: MetricSample = {
   timestamp: Date.now(),
-  opsPerSec: 12450,
-  hitRate: 96.5,
-  usedMemory: 48500000,
-  usedMemoryHuman: '46.25M',
+  opsPerSec: 0,
+  hitRate: 100.0,
+  usedMemory: 1048576,
+  usedMemoryHuman: '1.00M',
   maxMemory: 268435456,
-  memoryPercent: 18.1,
-  connectedClients: 42,
-  blockedClients: 2,
-  totalKeys: 1850,
+  memoryPercent: 0.4,
+  connectedClients: 1,
+  blockedClients: 0,
+  totalKeys: 0,
   evictedKeysPerSec: 0,
-  expiredKeysPerSec: 3,
-  networkInputBytesPerSec: 12450 * 64,
-  networkOutputBytesPerSec: 12450 * 128,
-  p99LatencyMs: 0.85,
+  expiredKeysPerSec: 0,
+  networkInputBytesPerSec: 0,
+  networkOutputBytesPerSec: 0,
+  p99LatencyMs: 0.25,
 };
 
 const DEFAULT_HEALTH: HealthSummary = {
@@ -40,25 +40,22 @@ function generateSeedHistory(): MetricSample[] {
   const points: MetricSample[] = [];
   for (let i = 60; i >= 0; i--) {
     const t = now - i * 60000;
-    const wave = Math.sin(t / 60000);
-    const ops = Math.floor(12200 + wave * 2500);
-    const mem = Math.floor(48500000 + wave * 1800000);
     points.push({
       timestamp: t,
-      opsPerSec: ops,
-      hitRate: Math.round((96.5 + wave * 1.5) * 10) / 10,
-      usedMemory: mem,
-      usedMemoryHuman: (mem / (1024 * 1024)).toFixed(2) + 'M',
+      opsPerSec: 0,
+      hitRate: 100.0,
+      usedMemory: 1048576,
+      usedMemoryHuman: '1.00M',
       maxMemory: 268435456,
-      memoryPercent: Math.round((mem / 268435456) * 1000) / 10,
-      connectedClients: Math.floor(42 + Math.abs(wave) * 10),
-      blockedClients: 2,
-      totalKeys: 1850 + Math.floor(wave * 30),
+      memoryPercent: 0.4,
+      connectedClients: 1,
+      blockedClients: 0,
+      totalKeys: 0,
       evictedKeysPerSec: 0,
-      expiredKeysPerSec: Math.floor(Math.random() * 4),
-      networkInputBytesPerSec: ops * 64,
-      networkOutputBytesPerSec: ops * 128,
-      p99LatencyMs: Math.round((0.85 + Math.abs(wave) * 0.4) * 100) / 100,
+      expiredKeysPerSec: 0,
+      networkInputBytesPerSec: 0,
+      networkOutputBytesPerSec: 0,
+      p99LatencyMs: 0.25,
     });
   }
   return points;

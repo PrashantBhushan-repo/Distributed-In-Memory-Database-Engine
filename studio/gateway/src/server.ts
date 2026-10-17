@@ -630,6 +630,9 @@ app.get('/api/health-summary', async (req, reply) => {
 
 // 11. Health Summary Simulation (for testing transitions)
 app.post('/api/health-summary/simulate', async (req, reply) => {
+  if (process.env.NODE_ENV === 'production') {
+    return reply.status(403).send({ error: 'Simulation endpoints are disabled in production mode' });
+  }
   const user = await requireAuth(req, reply);
   if (!user) return;
   const { condition } = (req.body as any) || {};

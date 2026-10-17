@@ -18,6 +18,7 @@ import { TtlHistogramChart } from '../features/expiration/TtlHistogramChart';
 import { ExpiredVsEvictedChart } from '../features/expiration/ExpiredVsEvictedChart';
 import { ActiveExpireStatsCard } from '../features/expiration/ActiveExpireStatsCard';
 import { BulkSetTtlModal } from '../features/expiration/BulkSetTtlModal';
+import { getDisplayHost } from '../utils/host';
 
 export const ExpirationPage: React.FC = () => {
   const [keys, setKeys] = useState<ExpiringKey[]>([]);
@@ -87,7 +88,7 @@ export const ExpirationPage: React.FC = () => {
                 Key Expiration &amp; TTL Lifecycle
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                127.0.0.1:6379[db0]
+                {getDisplayHost()}[db0]
               </span>
             </div>
             <p className="text-xs text-slate-400">

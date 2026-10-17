@@ -22,6 +22,7 @@ import { HistorySearchModal } from '../features/console/HistorySearchModal';
 import { DangerConfirmModal } from '../features/console/DangerConfirmModal';
 import { ConsoleTerminal } from '../features/console/ConsoleTerminal';
 import { registerPaletteItems } from '../components/CommandPalette';
+import { getDisplayHost } from '../utils/host';
 
 const WRITE_COMMAND_NAMES = new Set([
   'SET', 'SETNX', 'MSET', 'MSETNX', 'GETSET', 'APPEND', 'INCR', 'DECR', 'INCRBY', 'DECRBY',
@@ -443,7 +444,7 @@ export const ConsolePage: React.FC = () => {
                 Interactive Console
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                127.0.0.1:6379[db{activeDb}]
+                {getDisplayHost()}[db{activeDb}]
               </span>
               <span
                 className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase border flex items-center gap-1 ${

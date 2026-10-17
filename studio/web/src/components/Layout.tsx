@@ -29,6 +29,7 @@ import {
   Cpu,
   Globe,
 } from 'lucide-react';
+import { getDisplayHost } from '../utils/host';
 import { CommandPalette } from './CommandPalette';
 import { HelpDrawer } from './HelpDrawer';
 import { ConnectModal } from './ConnectModal';
@@ -215,13 +216,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         reason: 'Stream Reconnecting: Attempting to reconnect to live WebSocket metrics stream...',
       };
     }
+    const hostLabel = getDisplayHost();
     if (telemetry.status === 'connected' && !telemetry.isDemo) {
       return {
         pillClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40',
         dotClass: 'bg-emerald-400 animate-pulse',
-        label: '127.0.0.1:6379',
+        label: hostLabel,
         sub: `(${lat}ms)`,
-        reason: `Server Healthy (Green): Connected to live RedisX engine at 127.0.0.1:6379 (${lat}ms latency). Click to reconfigure.`,
+        reason: `Server Healthy (Green): Connected to live RedisX engine at ${hostLabel} (${lat}ms latency). Click to reconfigure.`,
       };
     }
     if (telemetry.isDemo || telemetry.status === 'demo') {
@@ -343,7 +345,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <Server className="h-4 w-4 text-emerald-400 shrink-0" />
             {!collapsed && (
               <div className="overflow-hidden">
-                <div className="text-xs font-bold text-white truncate">127.0.0.1:6379</div>
+                <div className="text-xs font-bold text-white truncate">{getDisplayHost()}</div>
                 <div className="text-[10px] text-emerald-400 truncate">Connected (TCP Active)</div>
               </div>
             )}

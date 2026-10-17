@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Database, Lock, Server, Shield, CheckCircle2, AlertCircle, Sparkles, X } from 'lucide-react';
+import { getDisplayHost, getDisplayHostname } from '../utils/host';
 
 interface ConnectModalProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onC
   const [mode, setMode] = useState<'connect' | 'login'>('connect');
 
   // Connection fields
-  const [host, setHost] = useState('127.0.0.1');
+  const [host, setHost] = useState(getDisplayHostname());
   const [port, setPort] = useState('6379');
   const [password, setPassword] = useState('');
   const [tls, setTls] = useState(false);
@@ -39,7 +40,7 @@ export const ConnectModal: React.FC<ConnectModalProps> = ({ isOpen, onClose, onC
           ok: true,
           message: data.redis.isDemo
             ? 'Connected via In-Memory Demo Engine (Realistic Seed Active)'
-            : 'Successfully connected to RedisX Server (127.0.0.1:6379)!',
+            : `Successfully connected to RedisX Server (${getDisplayHost()})!`,
         });
       } else {
         setTestResult({ ok: false, message: 'Could not reach gateway.' });

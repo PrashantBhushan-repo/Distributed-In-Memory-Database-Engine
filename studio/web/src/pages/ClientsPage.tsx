@@ -5,6 +5,7 @@ import { ClientSummaryStrip } from '../features/clients/ClientSummaryStrip';
 import { ClientsTable } from '../features/clients/ClientsTable';
 import { KillClientModal } from '../features/clients/KillClientModal';
 import { RenameClientModal } from '../features/clients/RenameClientModal';
+import { getDisplayHost } from '../utils/host';
 
 export const ClientsPage: React.FC = () => {
   const [clients, setClients] = useState<ClientInfo[]>([]);
@@ -104,7 +105,7 @@ export const ClientsPage: React.FC = () => {
                 Client Connections Manager
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                127.0.0.1:6379
+                {getDisplayHost()}
               </span>
             </div>
             <p className="text-xs text-slate-400">

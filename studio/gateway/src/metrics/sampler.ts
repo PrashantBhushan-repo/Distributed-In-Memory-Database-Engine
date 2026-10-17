@@ -35,36 +35,37 @@ export class MetricsSampler {
 
   // Pre-seed realistic historical data so sparklines look great immediately on boot
   private seedInitialHistory() {
+    const isDemo = this.client.getStatus().isDemo;
     const now = Date.now();
     const count = 720; // 1 hour at 5s intervals
     for (let i = count; i >= 0; i--) {
       const t = now - i * 5000;
       const wave = Math.sin(t / 60000);
       const wave2 = Math.cos(t / 25000);
-      const ops = Math.floor(12200 + wave * 2800 + wave2 * 900);
-      const mem = Math.floor(48500000 + wave * 2200000);
-      const hit = Math.min(99.4, Math.max(91.0, 96.5 + wave * 2.1));
-      const clients = Math.floor(42 + Math.abs(wave) * 12);
-      const p99 = Math.round((0.85 + Math.abs(wave2) * 0.45) * 100) / 100;
+      const ops = isDemo ? Math.floor(12200 + wave * 2800 + wave2 * 900) : 0;
+      const mem = isDemo ? Math.floor(48500000 + wave * 2200000) : 1048576;
+      const hit = isDemo ? Math.min(99.4, Math.max(91.0, 96.5 + wave * 2.1)) : 100.0;
+      const clients = isDemo ? Math.floor(42 + Math.abs(wave) * 12) : 1;
+      const p99 = isDemo ? Math.round((0.85 + Math.abs(wave2) * 0.45) * 100) / 100 : 0.25;
 
       const sample: MetricSample = {
         timestamp: t,
-        opsPerSec: Math.max(100, ops),
+        opsPerSec: Math.max(0, ops),
         hitRate: Math.round(hit * 10) / 10,
         usedMemory: mem,
         usedMemoryHuman: (mem / (1024 * 1024)).toFixed(2) + 'M',
         maxMemory: 268435456, // 256MB
         memoryPercent: Math.round((mem / 268435456) * 1000) / 10,
         connectedClients: clients,
-        blockedClients: 2,
-        totalKeys: 1850 + Math.floor(wave * 40),
+        blockedClients: 0,
+        totalKeys: isDemo ? 1850 + Math.floor(wave * 40) : 0,
         evictedKeysPerSec: 0,
-        expiredKeysPerSec: Math.floor(Math.random() * 5),
+        expiredKeysPerSec: 0,
         networkInputBytesPerSec: ops * 64,
         networkOutputBytesPerSec: ops * 256,
         p99LatencyMs: p99,
-        p50LatencyMs: Math.round((0.24 + Math.abs(wave2) * 0.1) * 100) / 100,
-        p90LatencyMs: Math.round((0.52 + Math.abs(wave2) * 0.2) * 100) / 100,
+        p50LatencyMs: isDemo ? Math.round((0.24 + Math.abs(wave2) * 0.1) * 100) / 100 : 0.10,
+        p90LatencyMs: isDemo ? Math.round((0.52 + Math.abs(wave2) * 0.2) * 100) / 100 : 0.18,
         opsByCommand: {
           get: Math.round(ops * 0.48),
           set: Math.round(ops * 0.24),
@@ -73,7 +74,7 @@ export class MetricsSampler {
           other: Math.round(ops * 0.06),
         },
         replicationLagSeconds: 0,
-        replicationLagBytes: 120,
+        replicationLagBytes: 0,
         rehashActive: false,
       };
 
@@ -132,8 +133,8 @@ export class MetricsSampler {
     const currentNetIn = (info.stats as any).total_net_input_bytes || currentCommands * 64;
     const currentNetOut = (info.stats as any).total_net_output_bytes || currentCommands * 128;
 
-    let opsPerSec = info.stats.instantaneous_ops_per_sec || 12000;
-    let hitRate = info.stats.hit_rate || 96.5;
+    let opsPerSec = typeof info.stats.instantaneous_ops_per_sec === 'number' ? info.stats.instantaneous_ops_per_sec : 0;
+    let hitRate = typeof info.stats.hit_rate === 'number' ? info.stats.hit_rate : 100.0;
     let evictedPerSec = 0;
     let expiredPerSec = 0;
     let netInPerSec = currentCommands * 64;
@@ -177,7 +178,7 @@ export class MetricsSampler {
     }
 
     const maxMem = info.memory.maxmemory || 268435456;
-    let usedMem = info.memory.used_memory || 48500000;
+    let usedMem = typeof info.memory.used_memory === 'number' && info.memory.used_memory >= 0 ? info.memory.used_memory : 1048576;
 
     // Apply simulation condition if active
     if (this.simulatedCondition === 'high_memory') {
@@ -247,20 +248,20 @@ export class MetricsSampler {
     return (
       this.latestSample || {
         timestamp: Date.now(),
-        opsPerSec: 12450,
-        hitRate: 96.5,
-        usedMemory: 48500000,
-        usedMemoryHuman: '46.25M',
+        opsPerSec: 0,
+        hitRate: 100.0,
+        usedMemory: 1048576,
+        usedMemoryHuman: '1.00M',
         maxMemory: 268435456,
-        memoryPercent: 18.1,
-        connectedClients: 42,
-        blockedClients: 2,
-        totalKeys: 1850,
+        memoryPercent: 0.4,
+        connectedClients: 1,
+        blockedClients: 0,
+        totalKeys: 0,
         evictedKeysPerSec: 0,
-        expiredKeysPerSec: 3,
-        networkInputBytesPerSec: 12450 * 64,
-        networkOutputBytesPerSec: 12450 * 128,
-        p99LatencyMs: 0.85,
+        expiredKeysPerSec: 0,
+        networkInputBytesPerSec: 0,
+        networkOutputBytesPerSec: 0,
+        p99LatencyMs: 0.25,
       }
     );
   }

@@ -38,9 +38,11 @@ services:
       - PORT=4000
       - HOST=0.0.0.0
       - LOG_LEVEL=info
-      - DEMO_FALLBACK=true
-      - JWT_SECRET=redisx-studio-super-secure-production-secret-key-32chars!
-      - CORS_ORIGIN=*
+      - NODE_ENV=production
+      - DEMO_MODE=false
+      - DEMO_FALLBACK=false
+      - JWT_SECRET=redisx-prod-auth-secret-key-32chars-minimum-token-pburls
+      - CORS_ORIGIN=https://pbredisdb.pburls.online,http://13.210.234.73:3000,http://127.0.0.1:3000
     depends_on:
       redisx:
         condition: service_healthy

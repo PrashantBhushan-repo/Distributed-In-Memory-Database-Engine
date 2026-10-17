@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, Send, Trash2, RotateCcw, AlertCircle, CornerDownLeft } from 'lucide-react';
+import { getDisplayHost } from '../../utils/host';
 
 interface ConsoleEntry {
   command: string;
@@ -108,7 +109,7 @@ export const PlaygroundConsole: React.FC<PlaygroundConsoleProps> = ({
               {/* Command line */}
               <div className="flex items-center justify-between text-slate-400">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-red-500 font-bold">127.0.0.1:6379[15]&gt;</span>
+                  <span className="text-red-500 font-bold">{getDisplayHost()}[15]&gt;</span>
                   <span className="text-slate-100 font-bold">{entry.command}</span>
                 </div>
                 {entry.durationMs !== undefined && (

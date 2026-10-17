@@ -1,6 +1,7 @@
 import React from 'react';
 import { Server, Database, Activity, ShieldCheck, AlertCircle } from 'lucide-react';
 import { ReplicationTopology } from './types';
+import { getDisplayHostname } from '../../utils/host';
 
 interface TopologyGraphProps {
   topology: ReplicationTopology;
@@ -101,7 +102,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({ topology, onSelect
                   UPSTREAM MASTER
                 </text>
                 <text x="90" y="44" fill="#94a3b8" fontSize="10" fontFamily="monospace" textAnchor="middle">
-                  {topology.masterHost || '127.0.0.1'}:{topology.masterPort || 6379}
+                  {topology.masterHost || getDisplayHostname()}:{topology.masterPort || 6379}
                 </text>
               </g>
             </g>
