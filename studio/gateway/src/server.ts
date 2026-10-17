@@ -1,6 +1,7 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { RedisGatewayClient } from './redis/client.js';
 import { SafetyEngine } from './safety/engine.js';
@@ -51,6 +52,21 @@ await app.register(cors, {
 });
 
 await app.register(websocket);
+
+// Industrial API Rate Limiting (120 req/min per IP, exempting health & WebSockets)
+await app.register(rateLimit, {
+  global: true,
+  max: 120,
+  timeWindow: '1 minute',
+  allowList: (req) => {
+    return req.url === '/health' || req.url.startsWith('/ws/');
+  },
+  errorResponseBuilder: (_req, context) => ({
+    statusCode: 429,
+    error: 'Too Many Requests',
+    message: `Rate limit exceeded. Maximum ${context.max} requests per minute allowed. Try again in ${Math.ceil(context.ttl / 1000)}s.`,
+  }),
+});
 
 const redisClient = new RedisGatewayClient();
 const safetyEngine = new SafetyEngine();
