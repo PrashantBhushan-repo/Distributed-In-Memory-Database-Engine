@@ -131,7 +131,16 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          script: mkdir -p /home/${{ secrets.EC2_USER }}/pbRedisDB
+          script: |
+            mkdir -p /home/${{ secrets.EC2_USER }}/pbRedisDB/data
+            # Clean up accidental directories if docker bind-mount created them when file was absent
+            if [ -d "/home/${{ secrets.EC2_USER }}/pbRedisDB/infra/configs/pbRedis.prod.conf" ]; then
+              rm -rf "/home/${{ secrets.EC2_USER }}/pbRedisDB/infra/configs/pbRedis.prod.conf"
+            fi
+
+      - name: Prepare Deployment Configs
+        run: |
+          cp .env.production infra/configs/.env.production
 
       - name: Copy Deployment Configs to EC2 (Zero Source Code)
         uses: appleboy/scp-action@v0.1.7
@@ -140,7 +149,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "docker-compose.prod.yml,infra/monitoring,infra/scripts"
+          source: "docker-compose.prod.yml,.env.production,infra/configs,infra/monitoring,infra/scripts"
           target: "/home/${{ secrets.EC2_USER }}/pbRedisDB"
 
       - name: Deploy Containers on EC2 via SSH
@@ -162,6 +171,11 @@ jobs:
 
             cd "/home/${{ secrets.EC2_USER }}/pbRedisDB"
 
+            # Ensure .env.production is in root
+            if [ -f "infra/configs/.env.production" ]; then
+              cp -f infra/configs/.env.production .env.production
+            fi
+
             echo "==> Authenticating Docker with GitHub Container Registry..."
             echo "${GH_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin
 
@@ -172,7 +186,7 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             echo "==> Waiting for container startup & healthchecks..."
-            sleep 8
+            sleep 10
             docker compose -f docker-compose.prod.yml ps
 
             echo "==> Pruning dangling image layers to conserve disk space..."
