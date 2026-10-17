@@ -32,7 +32,7 @@ const EnvSchema = z.object({
   REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
   REDIS_PASSWORD: z.string().default(''),
   DEMO_MODE: z.coerce.boolean().default(false),
-  DEMO_FALLBACK: z.coerce.boolean().default(nodeEnv !== 'production'),
+  DEMO_FALLBACK: z.coerce.boolean().default(false),
   JWT_SECRET: z
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters for cryptographically safe HS256 tokens')

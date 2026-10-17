@@ -1,5 +1,6 @@
 import { ParsedRedisInfo, MetricSample, HealthSummary, HealthIssue } from '../types.js';
 import { RedisGatewayClient } from '../redis/client.js';
+import { env } from '../config/env.js';
 
 export class MetricsSampler {
   private client: RedisGatewayClient;
@@ -35,7 +36,7 @@ export class MetricsSampler {
 
   // Pre-seed realistic historical data so sparklines look great immediately on boot
   private seedInitialHistory() {
-    const isDemo = this.client.getStatus().isDemo;
+    const isDemo = env.DEMO_FALLBACK && this.client.getStatus().isDemo;
     const now = Date.now();
     const count = 720; // 1 hour at 5s intervals
     for (let i = count; i >= 0; i--) {
@@ -115,13 +116,13 @@ export class MetricsSampler {
       info = await this.client.getInfo();
     } catch {
       info = {
-        server: { redis_version: '0.1.0', uptime_in_seconds: 3600, tcp_port: 6379, role: 'master' },
-        clients: { connected_clients: 42, blocked_clients: 0, maxclients: 10000 },
-        memory: { used_memory: 50000000, used_memory_human: '47.68M', used_memory_peak: 55000000, maxmemory: 268435456, maxmemory_policy: 'volatile-lru' },
-        stats: { total_connections_received: 100, total_commands_processed: 12000, instantaneous_ops_per_sec: 12000, keyspace_hits: 900, keyspace_misses: 40, hit_rate: 95.7 },
-        replication: { role: 'master', connected_slaves: 2, master_repl_offset: 10000, repl_backlog_size: 1048576 },
+        server: { redis_version: '0.1.0', uptime_in_seconds: 0, tcp_port: 6379, role: 'master' },
+        clients: { connected_clients: 1, blocked_clients: 0, maxclients: 10000 },
+        memory: { used_memory: 1048576, used_memory_human: '1.00M', used_memory_peak: 1048576, maxmemory: 268435456, maxmemory_policy: 'volatile-lru' },
+        stats: { total_connections_received: 1, total_commands_processed: 0, instantaneous_ops_per_sec: 0, keyspace_hits: 0, keyspace_misses: 0, hit_rate: 100 },
+        replication: { role: 'master', connected_slaves: 0, master_repl_offset: 0, repl_backlog_size: 1048576 },
         persistence: { rdb_last_bgsave_status: 'ok', rdb_changes_since_last_save: 0, aof_enabled: true },
-        keyspace: { db0: { keys: 1850, expires: 450, avg_ttl: 1840 } },
+        keyspace: {},
       };
     }
 

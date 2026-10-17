@@ -75,6 +75,7 @@ int main(int argc, char *argv[]) {
     std::string host = config_mgr.get_string("bind", "127.0.0.1");
     std::uint16_t port = static_cast<std::uint16_t>(config_mgr.get_int("port", 6379));
 
+    std::string config_file;
     for (int i = 1; i < argc; ++i) {
         std::string_view arg(argv[i]);
         if (arg == "--version") {
@@ -85,6 +86,30 @@ int main(int argc, char *argv[]) {
             print_help(argv[0]);
             return 0;
         }
+        if (arg == "-p" && i + 1 < argc) {
+            port = static_cast<std::uint16_t>(std::atoi(argv[++i]));
+        } else if (arg == "-h" && i + 1 < argc) {
+            host = argv[++i];
+        } else if ((arg == "-c" || arg == "--config") && i + 1 < argc) {
+            config_file = argv[++i];
+        } else if (!arg.starts_with("-") && arg != "redisx") {
+            config_file = argv[i];
+        }
+    }
+
+    if (!config_file.empty()) {
+        if (config_mgr.load_file(config_file)) {
+            REDISX_LOG_INFO("Loaded configuration file: %s", config_file.c_str());
+            host = config_mgr.get_string("bind", host);
+            port = static_cast<std::uint16_t>(config_mgr.get_int("port", port));
+        } else {
+            REDISX_LOG_WARN("Could not load configuration file: %s (using defaults)", config_file.c_str());
+        }
+    }
+
+    // CLI flags override config file
+    for (int i = 1; i < argc; ++i) {
+        std::string_view arg(argv[i]);
         if (arg == "-p" && i + 1 < argc) {
             port = static_cast<std::uint16_t>(std::atoi(argv[++i]));
         } else if (arg == "-h" && i + 1 < argc) {
@@ -104,6 +129,13 @@ int main(int argc, char *argv[]) {
     redisx::db::Keyspace keyspace;
     redisx::db::TTLManager ttl_mgr;
     redisx::memory::EvictionManager evict_mgr;
+    long long maxmem = config_mgr.get_size("maxmemory", 0);
+    if (maxmem > 0) {
+        evict_mgr.set_maxmemory(static_cast<std::size_t>(maxmem));
+    }
+    std::string policy_str = config_mgr.get_string("maxmemory-policy", "noeviction");
+    evict_mgr.set_policy(redisx::memory::string_to_policy(policy_str));
+
     redisx::commands::Dispatcher dispatcher;
 
     redisx::security::AuthEngine auth_engine;

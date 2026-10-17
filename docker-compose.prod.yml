@@ -5,7 +5,7 @@ services:
   redisx:
     image: ghcr.io/prashantbhushan-repo/pbredisdb-engine:latest
     container_name: redisx-server
-    command: ["redisx", "-h", "0.0.0.0", "-p", "6379", "-c", "/etc/redisx/redis.conf"]
+    command: ["-h", "0.0.0.0", "-p", "6379", "-c", "/etc/redisx/redis.conf"]
     ports:
       - "6379:6379"
       - "9121:9121"
@@ -46,6 +46,7 @@ services:
       - REDIS_HOST=redisx
       - REDIS_PORT=6379
       - NODE_ENV=production
+      - DEMO_MODE=false
       - DEMO_FALLBACK=false
     deploy:
       resources:

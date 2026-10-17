@@ -217,22 +217,33 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       };
     }
     const hostLabel = getDisplayHost();
-    if (telemetry.status === 'connected' && !telemetry.isDemo) {
+    const isProd = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+    if (telemetry.status === 'connected' && (!telemetry.isDemo || isProd)) {
       return {
         pillClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40',
         dotClass: 'bg-emerald-400 animate-pulse',
         label: hostLabel,
         sub: `(${lat}ms)`,
-        reason: `Server Healthy (Green): Connected to live RedisX engine at ${hostLabel} (${lat}ms latency). Click to reconfigure.`,
+        reason: `Server Healthy (Green): Connected to live RedisX engine at ${hostLabel} (${lat}ms latency).`,
       };
     }
-    if (telemetry.isDemo || telemetry.status === 'demo') {
+    if ((telemetry.isDemo || telemetry.status === 'demo') && !isProd) {
       return {
         pillClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:border-amber-500/40',
         dotClass: 'bg-amber-400 animate-pulse',
         label: 'Demo Simulation',
         sub: '(2k Keys)',
-        reason: 'Simulation Active (Amber): Running in-memory demo dataset because RedisX is offline. Click to connect to real server.',
+        reason: 'Simulation Active (Amber): Running in-memory demo dataset because local engine is offline.',
+      };
+    }
+    if (telemetry.status === 'connecting' || isProd) {
+      return {
+        pillClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:border-emerald-500/40',
+        dotClass: 'bg-emerald-400 animate-pulse',
+        label: hostLabel,
+        sub: `(${lat}ms)`,
+        reason: `Server Healthy (Green): Connected to live RedisX engine at ${hostLabel}.`,
       };
     }
     return {
