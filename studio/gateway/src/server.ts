@@ -8,10 +8,11 @@ import { MetricsSampler } from './metrics/sampler.js';
 import { authenticateUser, createToken, verifyToken, refreshToken } from './auth/jwt.js';
 import { UserContext, MonitorEntry, MonitorFilter, PubSubMessageEvent } from './types.js';
 import { playgroundEngine } from './playground/engine.js';
+import { env } from './config/env.js';
 
 const app = Fastify({
   logger: {
-    level: process.env.LOG_LEVEL || 'info',
+    level: env.LOG_LEVEL,
     redact: [
       'req.headers.authorization',
       'headers.authorization',
@@ -35,9 +36,7 @@ app.addHook('onSend', async (_req, reply) => {
 });
 
 // Locked CORS to allowed web origins
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:4000', 'http://127.0.0.1:4000'];
+const allowedOrigins = env.CORS_ORIGIN.split(',').map((s) => s.trim());
 
 await app.register(cors, {
   origin: (origin, cb) => {
@@ -1737,14 +1736,11 @@ app.get('/ws/metrics', { websocket: true }, (connectionOrSocket: any, req) => {
 
 export { app, redisClient, safetyEngine };
 
-if (process.env.NODE_ENV !== 'test') {
-  const PORT = Number(process.env.PORT) || 4000;
-  const HOST = process.env.HOST || '0.0.0.0';
-
+if (env.NODE_ENV !== 'test') {
   try {
-    await app.listen({ port: PORT, host: HOST });
-    console.log(`🚀 RedisX Studio Gateway listening on http://${HOST}:${PORT}`);
-    console.log(`📊 Health Endpoint: http://localhost:${PORT}/health`);
+    await app.listen({ port: env.PORT, host: env.HOST });
+    console.log(`🚀 RedisX Studio Gateway listening on http://${env.HOST}:${env.PORT} (${env.NODE_ENV} mode)`);
+    console.log(`📊 Health Endpoint: http://localhost:${env.PORT}/health`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

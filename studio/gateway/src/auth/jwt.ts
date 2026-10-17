@@ -1,14 +1,13 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { UserContext, UserRole } from '../types.js';
+import { env } from '../config/env.js';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'redisx-studio-super-secure-production-secret-key-32chars!'
-);
+const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET);
 
 const STATIC_USERS: Record<string, { pass: string; role: UserRole }> = {
-  admin: { pass: process.env.ADMIN_PASS || 'admin123', role: 'admin' },
-  operator: { pass: process.env.OPERATOR_PASS || 'operator123', role: 'operator' },
-  viewer: { pass: process.env.VIEWER_PASS || 'viewer123', role: 'viewer' },
+  admin: { pass: env.ADMIN_PASS, role: 'admin' },
+  operator: { pass: env.OPERATOR_PASS, role: 'operator' },
+  viewer: { pass: env.VIEWER_PASS, role: 'viewer' },
 };
 
 export async function authenticateUser(username: string, pass: string): Promise<UserContext | null> {

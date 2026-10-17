@@ -11,6 +11,7 @@ services:
       - "9121:9121"
     volumes:
       - ./data:/data
+      - ./infra/configs/pbRedis.prod.conf:/etc/redisx/redis.conf:ro
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -32,17 +33,13 @@ services:
     container_name: redisx-gateway
     ports:
       - "4000:4000"
+    env_file:
+      - .env.production
     environment:
       - REDIS_HOST=redisx
       - REDIS_PORT=6379
-      - PORT=4000
-      - HOST=0.0.0.0
-      - LOG_LEVEL=info
       - NODE_ENV=production
-      - DEMO_MODE=false
       - DEMO_FALLBACK=false
-      - JWT_SECRET=redisx-prod-auth-secret-key-32chars-minimum-token-pburls
-      - CORS_ORIGIN=https://pbredisdb.pburls.online,http://13.210.234.73:3000,http://127.0.0.1:3000
     depends_on:
       redisx:
         condition: service_healthy

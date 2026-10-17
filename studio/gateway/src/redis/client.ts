@@ -43,6 +43,7 @@ import { DemoRedisEngine } from './demo.js';
 import { SafetyEngine } from '../safety/engine.js';
 import { ACL_CATEGORIES, parseAclListLine, buildAclSetUserArgs } from '../security/acl.js';
 import { loadConfigMetadata, validateConfigParam, generateRedisConfExport } from '../config/meta.js';
+import { env } from '../config/env.js';
 
 let cachedCommands: CommandMeta[] | null = null;
 
@@ -81,10 +82,10 @@ export class RedisGatewayClient {
   private lastPingMs = 0;
 
   constructor() {
-    this.host = process.env.REDIS_HOST || '127.0.0.1';
-    this.port = Number(process.env.REDIS_PORT) || 6379;
-    this.password = process.env.REDIS_PASSWORD || undefined;
-    this.isDemoMode = process.env.DEMO_MODE === 'true';
+    this.host = env.REDIS_HOST;
+    this.port = env.REDIS_PORT;
+    this.password = env.REDIS_PASSWORD || undefined;
+    this.isDemoMode = env.DEMO_MODE;
 
     if (this.isDemoMode) {
       this.status = 'demo';
