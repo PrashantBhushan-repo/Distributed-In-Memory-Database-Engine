@@ -129,12 +129,12 @@ int main(int argc, char *argv[]) {
     redisx::db::Keyspace keyspace;
     redisx::db::TTLManager ttl_mgr;
     redisx::memory::EvictionManager evict_mgr;
-    long long maxmem = config_mgr.get_size("maxmemory", 0);
-    if (maxmem > 0) {
-        evict_mgr.set_maxmemory(static_cast<std::size_t>(maxmem));
-    }
+    std::string maxmem_str = config_mgr.get_string("maxmemory", "0");
+    try {
+        evict_mgr.set_maxmemory(static_cast<std::size_t>(std::stoull(maxmem_str)));
+    } catch (...) {}
     std::string policy_str = config_mgr.get_string("maxmemory-policy", "noeviction");
-    evict_mgr.set_policy(redisx::memory::string_to_policy(policy_str));
+    evict_mgr.set_policy(redisx::memory::parse_eviction_policy(policy_str));
 
     redisx::commands::Dispatcher dispatcher;
 
