@@ -37,7 +37,7 @@ jobs:
       - name: Install C++ Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++-12
+          sudo apt-get install -y cmake ninja-build g++-12 libssl-dev openssl python3
 
       - name: Configure CMake (Debug)
         run: cmake --preset debug

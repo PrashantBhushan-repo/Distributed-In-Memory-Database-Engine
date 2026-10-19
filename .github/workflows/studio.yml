@@ -1,0 +1,70 @@
+name: Studio integration
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+jobs:
+  studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install application dependencies
+        run: |
+          npm ci --prefix studio/gateway
+          npm ci --prefix studio/web
+      - name: Build and test applications
+        run: |
+          npm run build
+          npm test
+      - name: Build C++ engine
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev
+          cmake -S . -B build-studio-verify -DCMAKE_BUILD_TYPE=Release -DREDISX_BUILD_TESTS=OFF -DREDISX_BUILD_BENCHMARKS=OFF
+          cmake --build build-studio-verify -j 2
+      - name: Install browser
+        working-directory: studio/web
+        run: npx playwright install --with-deps chromium
+      - name: Verify browser to C++ integration
+        env:
+          CI: 'true'
+          DEMO_MODE: 'false'
+          DEMO_FALLBACK: 'false'
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: '16379'
+          HOST: 127.0.0.1
+          NODE_ENV: development
+          STUDIO_PLAYGROUND: 'true'
+          PORT: '14000'
+          CORS_ORIGIN: http://127.0.0.1:13000
+          REDISX_GATEWAY_URL: http://127.0.0.1:14000
+        run: |
+          printf 'bind 127.0.0.1\nport 16379\nmetrics-port 19121\nappendonly no\n' > build-studio-verify/studio-test.conf
+          (cd build-studio-verify && ./redisx studio-test.conf) > build-studio-verify/engine.log 2>&1 &
+          engine_pid=$!
+          node studio/gateway/dist/server.js > build-studio-verify/gateway.log 2>&1 &
+          gateway_pid=$!
+          npm --prefix studio/web run dev -- --host 127.0.0.1 --port 13000 --strictPort > build-studio-verify/web.log 2>&1 &
+          web_pid=$!
+          trap 'kill "$engine_pid" "$gateway_pid" "$web_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:13000/dashboard >/dev/null && curl -fsS http://127.0.0.1:14000/health >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run verify:engine
+          npm run test:studio
+          npm --prefix studio/web run test:metrics-memory
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-verification
+          path: |
+            build-studio-verify/*.png
+            build-studio-verify/*.json
+            build-studio-verify/*.log
+            studio/web/test-results
+            studio/web/test-results-metrics-memory
