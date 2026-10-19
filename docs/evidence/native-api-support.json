@@ -1,0 +1,87 @@
+[
+  {
+    "route": "/api/commands",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/dbsize",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/keys/tree",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/memory/overview",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/memory/top-keys",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/expiration/soonest",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/expiration/histogram",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/expiration/stats",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/clients",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/slowlog",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/persistence",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/replication",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/replication/preflight",
+    "status": 501,
+    "available": false
+  },
+  {
+    "route": "/api/acl/users",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/security/status",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/config",
+    "status": 200,
+    "available": true
+  },
+  {
+    "route": "/api/pubsub/channels",
+    "status": 200,
+    "available": true
+  }
+]

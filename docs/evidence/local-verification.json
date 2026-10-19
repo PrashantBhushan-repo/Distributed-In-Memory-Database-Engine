@@ -1,0 +1,68 @@
+{
+  "recordedDate": "2026-10-20",
+  "revision": "local working tree; no release certification",
+  "environment": {
+    "studioHost": "Windows / WSL2 development workspace",
+    "node": "24.14.0",
+    "npm": "11.9.0",
+    "chrome": "155.0.8059.84",
+    "availableEngineCompiler": "GCC 15.2.0",
+    "cmake": "4.2.3",
+    "kernel": "Linux 6.18.33.2-microsoft-standard-WSL2"
+  },
+  "checks": {
+    "unit": {
+      "gateway": 38,
+      "frontend": 50,
+      "total": 88,
+      "command": "npm test",
+      "rerunForReadme": true
+    },
+    "nativeIntegration": {
+      "passed": 16,
+      "enginePort": 16379,
+      "command": "npm run verify:engine",
+      "rerunForReadme": true,
+      "source": "studio/gateway/scripts/verify-engine.mjs"
+    },
+    "browser": {
+      "passed": 6,
+      "routesExercised": 18,
+      "result": "passed",
+      "source": "studio/web/e2e/studio.spec.ts",
+      "statusRecord": "browser-last-run.json",
+      "rerunForReadme": false
+    },
+    "metricsMemory": {
+      "passed": 1,
+      "historyFixturePoints": 10000,
+      "jsOldSpaceLimitMiB": 128,
+      "sampleCountLimit": 360,
+      "rendererPrivateMemoryAssertionMiB": 512,
+      "finalRetainedHeapAssertionMiB": 64,
+      "source": "studio/web/e2e/metrics-memory.spec.ts",
+      "statusRecord": "memory-test-last-run.json",
+      "rerunForReadme": false
+    },
+    "engineAudit": {
+      "recordedDate": "2026-10-19",
+      "debugPassed": 94,
+      "asanUbsanPassed": 94,
+      "tsanPassed": 94,
+      "fuzzerExecutions": 419081,
+      "fuzzerDurationSeconds": 301,
+      "summary": "engine-audit-summary.txt",
+      "rerunForReadme": false
+    },
+    "publicRouteBundle": {
+      "initialJavaScriptGzipKiB": 81.7,
+      "scope": "initial public route only; excludes subsequent Studio/chart/editor chunks",
+      "source": "studio/web/scripts/prerender.mjs"
+    }
+  },
+  "notes": [
+    "Unit and native integration totals were refreshed during the README rewrite. Browser and memory results are from the completed preceding code verification on the same application source.",
+    "Raw profile fields ending in MB use bytes divided by 1048576, so values are MiB.",
+    "A passing endpoint does not certify every field or administrative mutation."
+  ]
+}
