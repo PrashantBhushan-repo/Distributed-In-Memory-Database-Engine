@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
+import { environmentBoolean } from './boolean.js';
 
 // Automatically detect and load appropriate .env file based on NODE_ENV
 const nodeEnv = process.env.NODE_ENV || 'development';
@@ -31,8 +32,10 @@ const EnvSchema = z.object({
   REDIS_HOST: z.string().default('127.0.0.1'),
   REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
   REDIS_PASSWORD: z.string().default(''),
-  DEMO_MODE: z.coerce.boolean().default(false),
-  DEMO_FALLBACK: z.coerce.boolean().default(false),
+  REDIS_TLS: environmentBoolean.default(false),
+  STUDIO_PLAYGROUND: environmentBoolean.default(false),
+  DEMO_MODE: environmentBoolean.default(false),
+  DEMO_FALLBACK: environmentBoolean.default(false),
   JWT_SECRET: z
     .string()
     .min(32, 'JWT_SECRET must be at least 32 characters for cryptographically safe HS256 tokens')

@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify:engine": "npm run build && node scripts/verify-engine.mjs"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

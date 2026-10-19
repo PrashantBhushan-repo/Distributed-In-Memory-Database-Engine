@@ -55,11 +55,13 @@ export function parseRedisInfo(rawInfo: string): ParsedRedisInfo {
 
   return {
     server: {
-      redis_version: s('server', 'redis_version', '0.1.0-redisx'),
+      redis_version: s('server', 'redis_version', 'unknown'),
       uptime_in_seconds: n('server', 'uptime_in_seconds', 0),
       tcp_port: n('server', 'tcp_port', 6379),
       role: s('replication', 'role', s('server', 'role', 'master')),
-      os: s('server', 'os', 'Linux (epoll reactor)'),
+      os: s('server', 'os', 'unknown'),
+      process_id: sections.server?.process_id ? n('server', 'process_id') : undefined,
+      redis_mode: s('server', 'redis_mode', 'unknown'),
     },
     clients: {
       connected_clients: n('clients', 'connected_clients', 1),
@@ -80,6 +82,11 @@ export function parseRedisInfo(rawInfo: string): ParsedRedisInfo {
       keyspace_hits: hits,
       keyspace_misses: misses,
       hit_rate: hitRate,
+      evicted_keys: n('stats', 'evicted_keys'),
+      expired_keys: n('stats', 'expired_keys'),
+      rejected_connections: n('stats', 'rejected_connections'),
+      total_net_input_bytes: sections.stats?.total_net_input_bytes === undefined ? undefined : n('stats', 'total_net_input_bytes'),
+      total_net_output_bytes: sections.stats?.total_net_output_bytes === undefined ? undefined : n('stats', 'total_net_output_bytes'),
     },
     replication: {
       role: s('replication', 'role', 'master'),
@@ -88,7 +95,7 @@ export function parseRedisInfo(rawInfo: string): ParsedRedisInfo {
       repl_backlog_size: n('replication', 'repl_backlog_size', 1048576),
     },
     persistence: {
-      rdb_last_bgsave_status: s('persistence', 'rdb_last_bgsave_status', 'ok'),
+      rdb_last_bgsave_status: s('persistence', 'rdb_last_bgsave_status', 'unknown'),
       rdb_changes_since_last_save: n('persistence', 'rdb_changes_since_last_save', 0),
       aof_enabled: s('persistence', 'aof_enabled', '0') === '1',
     },
