@@ -1,7 +1,36 @@
 #include "redisx/types/object.h"
+#include <algorithm>
+#include <charconv>
+#include <limits>
 #include <stdexcept>
 
 namespace redisx::types {
+size_t Object::memory_usage() const {
+    return std::visit([](const auto &value) -> size_t {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, std::string>) return value.capacity() + 1;
+        else if constexpr (std::is_same_v<T, Listpack>) return value.bytes();
+        else if constexpr (std::is_same_v<T, Intset> || std::is_same_v<T, Quicklist> || std::is_same_v<T, Skiplist>) return value.memory_usage();
+        else {
+            size_t bytes = value.bucket_count() * sizeof(void *);
+            for (const auto &element : value) {
+                bytes += sizeof(typename T::value_type) + 2 * sizeof(void *);
+                if constexpr (std::is_same_v<T, std::unordered_set<std::string>>) bytes += element.capacity() + 1;
+                else bytes += element.first.capacity() + element.second.capacity() + 2;
+            }
+            return bytes;
+        }
+    }, data_);
+}
+
+namespace {
+std::string score_string(double value) {
+    char buffer[128];
+    const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value, std::chars_format::general, std::numeric_limits<double>::max_digits10);
+    return std::string(buffer, result.ptr);
+}
+}
+
 
 Object::Object(std::string str)
     : type_(ObjectType::String), encoding_(Encoding::Raw), data_(std::move(str)) {}
@@ -427,13 +456,13 @@ bool Object::zset_add(double score, std::string_view member, const ObjectConfig 
         for (size_t i = 0; i < pairs; ++i) {
             auto m = lp.get(i * 2);
             if (m && *m == member) {
-                lp.replace(i * 2 + 1, std::to_string(score));
+                lp.replace(i * 2 + 1, score_string(score));
                 check_zset_promotion(cfg);
                 return false; // Updated score
             }
         }
         lp.push_back(member);
-        lp.push_back(std::to_string(score));
+        lp.push_back(score_string(score));
         check_zset_promotion(cfg);
         return true; // Added new member
     } else {
@@ -520,6 +549,9 @@ std::vector<std::pair<std::string, double>> Object::zset_range(
             }
         }
 
+        std::sort(vec.begin(), vec.end(), [](const auto &a, const auto &b) {
+            return a.second < b.second || (a.second == b.second && a.first < b.first);
+        });
         if (reverse) {
             for (size_t r = start; r <= stop; ++r) {
                 size_t idx = length - 1 - r;
@@ -541,13 +573,9 @@ std::optional<size_t> Object::zset_rank(std::string_view member) const {
     if (type_ != ObjectType::ZSet) return std::nullopt;
 
     if (encoding_ == Encoding::Listpack) {
-        const auto &lp = std::get<Listpack>(data_);
-        size_t pairs = lp.size() / 2;
-        for (size_t i = 0; i < pairs; ++i) {
-            auto m = lp.get(i * 2);
-            if (m && *m == member) {
-                return i;
-            }
+        const auto values = zset_range(0, std::numeric_limits<size_t>::max());
+        for (size_t i = 0; i < values.size(); ++i) {
+            if (values[i].first == member) return i;
         }
         return std::nullopt;
     } else {

@@ -23,6 +23,8 @@ struct ServerStats {
     std::uint64_t keyspace_misses{0};
     std::uint64_t expired_keys{0};
     std::uint64_t evicted_keys{0};
+    std::uint64_t last_save_time{0};
+    std::uint64_t ops_per_second{0};
 };
 
 class InfoProvider {

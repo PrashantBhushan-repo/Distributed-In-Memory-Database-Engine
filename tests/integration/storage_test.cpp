@@ -73,6 +73,7 @@ class StorageServerIntegrationTest : public ::testing::Test {
         });
 
         ASSERT_TRUE(listener_->start().has_value());
+        port_ = listener_->port();
 
         server_thread_ = std::thread([this]() { server_loop_->run(); });
 
@@ -89,7 +90,7 @@ class StorageServerIntegrationTest : public ::testing::Test {
         listener_->stop();
     }
 
-    std::uint16_t port_{6482};
+    std::uint16_t port_{0};
     std::unique_ptr<net::EventLoop> server_loop_;
     std::unique_ptr<net::Listener> listener_;
     db::Keyspace keyspace_;

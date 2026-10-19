@@ -1,0 +1,64 @@
+# C++ engine audit — 19 October 2026
+
+This audit follows the supplied Stage 0–13 build roadmap. It distinguishes working behavior, corrections made, and features that the roadmap describes but the engine does not yet implement. Passing these checks is evidence for the exercised paths, not a claim of perfect correctness or complete Redis compatibility.
+
+## Corrections by roadmap stage
+
+| Stage | Findings and corrections | Validation / boundary |
+|---|---|---|
+| 0 — foundation | Linux/WSL is now the explicit platform requirement; native Windows previously compiled an epoll stub. Fixed the benchmarks-off build dependency. Added OpenSSL dependencies to build/packaging instructions. Buffer growth checks overflow and self-appends safely. | GCC Debug and Clang sanitizer builds; timer and buffer regressions. |
+| 1 — event loop | Callback self-removal no longer destroys the executing function. Due timers remain cancellable by earlier callbacks. Stop state is atomic. Maintenance reschedules instead of running once. SIGINT/SIGTERM use a signal-safe flag; socket writes avoid SIGPIPE. Graceful close drains replies; blocked clients pause reads and resume buffered pipelines. Accept sets nonblocking mode before rejecting clients. Configured maxclients, backlog, keepalive and idle timeout are applied. | Real sockets, pipelines, blocking requests, concurrent client tests. Reactor-owned state is not generally safe to mutate from arbitrary threads. |
+| 2 — protocol | Strict bulk-only request arrays; reject negative lengths, oversized headers and malformed quoting. Inline requests stop at the first newline. Added a per-client streaming parser that retains completed argument progress across reads. Wildcard matching no longer recurses exponentially. Fuzzer instruments parser code, not just its harness. | Byte-at-a-time binary request tests and five-minute ASan fuzz run. The static convenience parser remains whole-request oriented; recovery and replica parsing still use that API. |
+| 3 — keyspace/strings | Checked integer arithmetic; strict SET options and expiration arithmetic; failed conditional SET is not logged as a mutation. SCAN handles shrinking tables, callback deletions, invalid options, and bounded work for selective patterns. Rehash bounds empty-bucket visits. | Regression tests preserve values after rejected writes. Some Redis string commands/options remain unsupported. |
+| 4 — expiration | TTLs use Unix wall-clock milliseconds; scheduling budgets use monotonic time. Collection reads also hide/delete expired keys. Active expiration retains cursors across cycles. Expiration invalidates WATCH and emits deterministic DEL to AOF/replicas. Replicas retain expired physical entries while hiding them from reads. | Absolute/relative TTL, overflow, rounding, WATCH and restart checks. Expiration is sampled and eventual, not a guarantee that one cycle visits every key. |
+| 5 — collections | Sorted-set compact ordering and ranks now use score then lexical member order. Scores retain double precision and reject NaN/invalid inputs before mutation. Negative ZRANGE indexes and numeric errors are handled. Integer sets preserve distinct text such as `01` and `1`. Intsets now actually widen 16/32/64-bit vectors. Small collections use one packed byte buffer with integer/string encoding instead of vector<string>. Removed allocation from noexcept skiplist moves. Collection growth respects DENYOOM flags. | Roundtrips, binary/integer edge cases, promotion, sorted ordering and precision. Full command-family coverage is still incomplete; see below. |
+| 6 — memory/eviction | Removed double accounting when evicting. Stored accounting balances deletes after in-place mutations; estimates follow collection contents/capacities instead of a constant 64 bytes. LRU/LFU accesses update metadata. Sampling no longer copies/shuffles the entire keyspace. Evictions invalidate WATCH and propagate DEL. | Growth/delete accounting and eviction tests. Memory accounting is a dynamic-storage estimate, not allocator-wide RSS or a hard process-memory cap. |
+| 7 — persistence | AOF is wired to successful server writes and real write/fsync calls. Disk failure returns MISCONF and disables later mutations. Configuration determines directory/filenames/policy. Recovery treats a complete AOF as authoritative instead of double-applying a snapshot. Truncated command/transaction tails are physically repaired. Replay freezes logical time so later operations do not resurrect already-expired keys. Snapshot CRC is checked before mutation; parse into a temporary keyspace. Correct CRC64/Jones table, version 0002, historical v1 reader. Unique temporary files are private (0600), cleaned up automatically, atomically renamed and synced with their parent directory. BGSAVE/BGREWRITEAOF use fork snapshots with child reaping and buffered concurrent writes. | SIGKILL/restart tests across all five types; corrupt snapshot, tail repair, fsync/write failure, concurrent save/rewrite and transaction failure tests. See persistence-format.md for durability limits. |
+| 8 — replication | Canonical effects use stored absolute expirations, not reparsed/untrusted relative arguments. ACKs are no longer prefilled with unearned offsets and are clamped to the produced stream. New replicas receive a SELECT boundary. Handshake parses replies separately from request arrays; ACK timer recurs. Snapshot loading preserves old data on corruption; successful full sync rebuilds local AOF/snapshot persistence before acknowledging the base. Partial sync requests the next unapplied byte. WAIT parks only its client. Transaction frames retain queued effects until EXEC and ACK only applied bytes. | Real primary/replica full sync, live writes, TTLs, transactions, WAIT, read-only checks and replica AOF restart; backlog unit tests. Cross-Redis RDB interoperability, upstream TLS/auth and automatic failover are not implemented. |
+| 9 — coordination | EXEC tracks SELECT and returns to the selected database. Rechecks ACL/read-only rules at execution. WATCH expiry and multi-key writes invalidate correctly. Failed/no-op conditional writes avoid false logging. Fixed blocked-client iterator invalidation, timeout validation and wrong-type destination data loss. Deferred pops use the normal dispatcher/persistence path. Pub/sub PING and empty unsubscribe acknowledgments are correct; channel unsubscribe preserves patterns. | Real pipelined blocking/unblocking, durable pops, WATCH expiration and pub/sub regressions. Connection-state changes inside MULTI are explicitly rejected rather than silently executed ahead of the queue. |
+| 10 — configuration/security/metrics | Strict complete integer/boolean parsing, checked size suffixes, transactional config-file loading, CLI precedence and startup errors. Persistence paths cannot claim to change dynamically without applying. CONFIG REWRITE uses atomic replacement, restrictive file mode and escaped values. AUTH checks the actual named enabled ACL user; missing/deleted users fail closed. ACL changes are atomic; all recognized command keys and channel patterns are checked. Replaced plaintext TLS stub with OpenSSL TLS 1.2+ server transport and startup certificate validation. CLIENT metadata and COMMAND catalog derive from the live server. Removed fake process IDs, debug addresses, save times and ops/sec. Metrics waits for a complete HTTP request and validates the path. | Real TLS binary values and plaintext rejection, actual redis-py client metadata, auth/ACL and bad-config checks. TLS listener currently provides server authentication, not configurable mutual TLS. RESP3 is explicitly rejected. |
+| 11 — testing | Added targeted regressions and real-process server tests. Corrected a chaos test that called a memory response an acknowledged durable write even when AOF append failed. Fixed a malformed fixed-length pipeline generator. Split socket smoke claims from actual client-tool checks. | See executed checks below. Existing in-process model/chaos tests do not prove a production cluster campaign. |
+| 12 — performance | Removed repeated request reparsing, recursive wildcard explosion, whole-keyspace eviction sampling and fake compact storage. Existing benchmark numbers are marked historical; simulated CPU breakdown is labelled accordingly. | Actual redis-benchmark smoke validates client compatibility only. No new production throughput or profile claim. |
+| 13 — delivery | Updated dependencies, engine quickstart, protocol/durability boundaries and persistence specification. Retained unrelated frontend changes. | Local verification only; no deployment or release publishing. |
+
+## Executed checks
+
+- Baseline: 65 original CTest checks passed before corrections. The first 17 new targeted regressions all failed against the original code, then passed after fixes.
+- GCC Debug: **94/94 CTest checks passed** (`gcc-tests-complete.log`).
+- Clang ASan+UBSan: **94/94 CTest checks passed**, including **18 real-server scenarios** grouped under ServerAudit (`asan-tests-complete.log`).
+- Clang TSan: **94/94 CTest checks passed**, with no reported data races in the exercised paths (`tsan-tests-complete.log`).
+- libFuzzer with ASan/UBSan: **419,081 runs over 301 seconds**, zero detected crashes. Covers complete and fragmented RESP requests; not every possible input or command execution path.
+- Actual **redis-py 8.1.0**: binary strings, hash/set/zset commands, transactions, WATCH and client naming.
+- Actual **redis-cli** PING and `--pipe`: 1,000 pipelined writes, zero reported errors.
+- Actual **redis-benchmark**: SET/GET smoke, 1,000 requests per selected operation, four clients. These debug/sanitizer runs are not performance measurements.
+
+Local evidence (ignored build artifacts): `build/codex-debug/baseline-tests.log`, `audit-before.log`, `full-tests2.log`, `asan-tests-complete.log`, `tsan-tests-complete.log`, `gcc-tests-complete.log`, `fuzz.log`, `real-clients.log`. Later verification logs may supersede earlier runs when a regression caused another correction.
+
+## Compatibility boundaries and remaining roadmap features
+
+The roadmap is a larger product specification than the current implemented command catalog. Use `COMMAND LIST` / `COMMAND INFO` to inspect the actual server rather than assuming every Redis command exists. In particular, full LINDEX/LSET/LTRIM/LREM, HKEYS/HVALS/HINCRBY, SPOP/SRANDMEMBER/set algebra STORE, and ZINCRBY/ZRANGEBYSCORE/ZCOUNT command coverage is not implemented by this audit. ZADD's full option set and RESP3 are also incomplete. Unsupported commands return errors; they must not be advertised as working.
+
+Memory estimates exclude allocator internals, connection/parser buffers, fork copy-on-write overhead, and the process runtime. `maxmemory` therefore limits the tracked dataset estimate, not process RSS. A single admitted write can exceed the configured threshold; later DENYOOM checks enforce pressure. Background everysec fsync currently executes on the event-loop maintenance tick and can stall on slow storage. Full synchronization serializes a snapshot synchronously before transmission; high-volume resync needs further latency work. Replica snapshots use the RedisX format, not Redis RDB.
+
+The TLS listener encrypts incoming client traffic with a configured certificate/key. Upstream replica connections currently require an IPv4 address and do not support AUTH/TLS. ACL category/selector behavior is a supported subset, not complete Redis ACL parity. HELLO options are rejected explicitly; use AUTH and CLIENT SETNAME separately with RESP2.
+
+The completed tests do not certify full allocator-exhaustion handling, sustained disk-full recovery, arbitrary process-kill timing, disk-controller power-loss durability, cross-platform snapshot portability, unlimited client/replica buffering, or all fault combinations. Those require dedicated workload and fault campaigns; historical documentation that implied otherwise has been corrected.
+
+## Reproduce
+
+Linux/WSL requires CMake, Ninja, a C++20 compiler, OpenSSL headers, the openssl CLI, Python 3, and GoogleTest sources (fetched by CMake). Benchmarks require Google Benchmark unless disabled.
+
+```sh
+cmake --preset debug
+cmake --build --preset debug --parallel 3
+ctest --preset debug --output-on-failure
+
+cmake --preset asan
+cmake --build --preset asan --parallel 3
+ctest --preset asan --output-on-failure
+
+# Actual client compatibility; install redis in an isolated Python environment first.
+python tests/compat/real_client_audit.py build/debug/redisx
+```
+
+For libFuzzer, use Clang with `REDISX_BUILD_FUZZERS=ON` and `REDISX_ENABLE_SANITIZER_ADDRESS=ON`, then run `tests/resp_fuzz <corpus-directory> -max_total_time=300`. Tests create their own temporary data directories and ephemeral ports. Existing copied `build-wsl` caches may point to another checkout; configure a fresh build directory instead of reusing them.

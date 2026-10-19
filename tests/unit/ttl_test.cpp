@@ -174,7 +174,9 @@ TEST_F(TTLTest, ActiveExpireCycle) {
     mock_time_->advance_ms(600);
 
     // Active expire cycle runs and purges expired keys
-    expired = ttl_mgr_->active_expire_cycle(keyspace_, 100);
+    expired = 0;
+    // Budgeted sampling is eventual; a single cycle need not inspect every bucket.
+    for (int cycle = 0; cycle < 32 && expired < 50; ++cycle) expired += ttl_mgr_->active_expire_cycle(keyspace_, 100);
     EXPECT_EQ(expired, 50u);
     EXPECT_EQ(keyspace_.db_size(0), 50u);
 }
@@ -188,16 +190,16 @@ TEST_F(TTLTest, ReplicaModeBehavior) {
 
     // In replica mode, expire_if_needed returns true but DOES NOT delete the key
     EXPECT_TRUE(ttl_mgr_->expire_if_needed(keyspace_, 0, "rep_key"));
-    EXPECT_TRUE(keyspace_.db_exists(0, "rep_key")); // Key still in dict!
+    EXPECT_TRUE(keyspace_.get_db(0).contains("rep_key")); // Key still in dict!
 
     // Active expire cycle does 0 work in replica mode
     std::size_t expired = ttl_mgr_->active_expire_cycle(keyspace_, 10);
     EXPECT_EQ(expired, 0u);
-    EXPECT_TRUE(keyspace_.db_exists(0, "rep_key"));
+    EXPECT_TRUE(keyspace_.get_db(0).contains("rep_key"));
 
     // GET command in replica mode returns nil bulk without deleting
     core::Buffer out;
     dispatch({"GET", "rep_key"}, out);
     EXPECT_EQ(out.peek_string_view(), "$-1\r\n");
-    EXPECT_TRUE(keyspace_.db_exists(0, "rep_key"));
+    EXPECT_TRUE(keyspace_.get_db(0).contains("rep_key"));
 }

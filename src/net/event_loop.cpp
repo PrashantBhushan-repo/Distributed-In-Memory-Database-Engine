@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -129,20 +130,14 @@ void EventLoop::process_timers() {
 
     std::uint64_t now = time_provider_->monotonic_now_ms();
 
-    std::vector<TimerEntry> expired;
-    for (auto it = timers_.begin(); it != timers_.end();) {
-        if (it->first.first > now) {
-            break;
-        }
-        expired.push_back(std::move(it->second));
-        timer_lookup_.erase(it->second.id);
-        it = timers_.erase(it);
-    }
-
-    for (const auto &entry : expired) {
-        if (entry.callback) {
-            entry.callback();
-        }
+    std::vector<TimerId> expired;
+    for (auto it = timers_.begin(); it != timers_.end() && it->first.first <= now; ++it) expired.push_back(it->second.id);
+    for (const auto id : expired) {
+        const auto found = timer_lookup_.find(id);
+        if (found == timer_lookup_.end()) continue; // An earlier callback cancelled this timer.
+        auto entry = std::move(timers_.at(found->second));
+        timers_.erase(found->second); timer_lookup_.erase(found);
+        if (entry.callback) entry.callback();
     }
 }
 
@@ -169,13 +164,15 @@ int EventLoop::run_once(int max_timeout_ms) {
     // Compute poll timeout from nearest timer
     int poll_timeout = max_timeout_ms;
 
+    if (!deferred_tasks_.empty()) poll_timeout = 0;
+
     if (!timers_.empty()) {
         std::uint64_t now = time_provider_->monotonic_now_ms();
         std::uint64_t nearest_expire = timers_.begin()->first.first;
 
         int timer_timeout = 0;
         if (nearest_expire > now) {
-            timer_timeout = static_cast<int>(nearest_expire - now);
+            timer_timeout = static_cast<int>(std::min(nearest_expire - now, static_cast<std::uint64_t>(std::numeric_limits<int>::max())));
         }
 
         if (poll_timeout < 0 || timer_timeout < poll_timeout) {
@@ -206,7 +203,8 @@ int EventLoop::run_once(int max_timeout_ms) {
 
         auto it = file_events_.find(fd);
         if (it != file_events_.end() && it->second.callback) {
-            it->second.callback(revents);
+            auto callback = it->second.callback;
+            callback(revents);
         }
     }
 

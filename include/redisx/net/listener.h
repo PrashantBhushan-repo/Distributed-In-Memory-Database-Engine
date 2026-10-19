@@ -26,6 +26,10 @@ class Listener {
 
     core::Result<void> start();
     void stop();
+    [[nodiscard]] std::uint16_t port() const { return port_; }
+    void set_tls_context(std::shared_ptr<security::TlsContext> context) { tls_context_ = std::move(context); }
+    void set_backlog(int backlog) { backlog_ = backlog; }
+    void set_keepalive(int seconds) { keepalive_ = seconds; }
 
     void set_new_connection_callback(NewConnectionCallback cb) {
         on_new_connection_ = std::move(cb);
@@ -52,6 +56,8 @@ class Listener {
     std::uint16_t port_;
     size_t max_clients_;
     int listen_fd_{-1};
+    int backlog_{511}, keepalive_{300};
+    std::shared_ptr<security::TlsContext> tls_context_;
 
     NewConnectionCallback on_new_connection_;
     std::unordered_map<int, std::shared_ptr<Connection>> connections_;

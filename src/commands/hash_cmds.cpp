@@ -132,7 +132,7 @@ static void handle_hexists(const proto::Command &cmd, db::Keyspace &ks, std::siz
 }
 
 void register_hash_commands(Dispatcher &dispatcher) {
-    dispatcher.register_command({"HSET", -4, CMD_FLAG_WRITE, handle_hset});
+    dispatcher.register_command({"HSET", -4, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, handle_hset});
     dispatcher.register_command({"HGET", 3, CMD_FLAG_READONLY, handle_hget});
     dispatcher.register_command({"HDEL", -3, CMD_FLAG_WRITE, handle_hdel});
     dispatcher.register_command({"HGETALL", 2, CMD_FLAG_READONLY, handle_hgetall});

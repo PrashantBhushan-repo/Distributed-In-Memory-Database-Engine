@@ -53,7 +53,7 @@ TEST(EvictionTest, SampledLRUEviction) {
     for (int i = 0; i < 20; ++i) {
         keyspace.db_set(0, "key_" + std::to_string(i), redisx::db::Value("value_" + std::to_string(i)));
     }
-    redisx::memory::MemoryTracker::instance().alloc(500);
+    // Only actual keyspace allocations participate; do not inject fictitious memory.
 
     // Trigger eviction
     bool res = evict_mgr.perform_eviction(keyspace, ttl_mgr);

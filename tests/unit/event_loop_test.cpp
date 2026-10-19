@@ -40,3 +40,12 @@ TEST(EventLoopTest, CancelTimer) {
 
     EXPECT_FALSE(timer_fired);
 }
+
+TEST(EventLoopTest, CallbackCanCancelAnotherDueTimer) {
+    auto clock = std::make_shared<MockTimeProvider>(1000);
+    EventLoop loop(clock); TimerId second = 0; bool fired = false;
+    loop.add_timer(1, [&] { EXPECT_TRUE(loop.cancel_timer(second)); });
+    second = loop.add_timer(1, [&] { fired = true; });
+    clock->advance_ms(1); loop.run_once(0);
+    EXPECT_FALSE(fired);
+}

@@ -1,3 +1,5 @@
+> Historical measurements: these numbers predate the engine audit and are not measurements of the current code. The component CPU breakdown artifact is explicitly simulated; it is not a profiler capture. No throughput or leak-freedom certification follows from these figures. See [engine-audit.md](engine-audit.md).
+
 # RedisX Engine Performance & Benchmarking Report (Stage 10 Baseline)
 
 This document contains empirical performance baseline measurements and SDE-2 level performance analysis for **RedisX (`pbRedisDB`)**, an industry-level Redis-compatible in-memory database built in C++20 using a non-blocking `epoll` I/O event loop.
@@ -129,7 +131,7 @@ WARNING: Could not fetch server CONFIG
   > *"Achieved **388.76 MB/sec network read throughput** (37,960+ QPS) under 10 KB heavy payload stress, bounding $p_{99}$ read tail latency at **2.911ms** with zero memory allocation degradation."*
 
 * **High-Volume Continuous Load Reliability:**
-  > *"Sustained **1,000,000 continuous operations** under 64-command batch pipeline stress at **132,800+ GET QPS**, demonstrating zero memory leaks or I/O ring buffer overflows in C++."*
+  > *"Sustained **1,000,000 continuous operations** under 64-command batch pipeline stress at **132,800+ GET QPS**, as a historical observation, without proving memory or I/O correctness."*
 
 * **High-Concurrency Connection Multiplexing:**
   > *"Scaled `epoll` reactor loop to handle **500 parallel client socket connections** with zero packet drops, maintaining **54,700+ GET QPS (94.1% throughput retention)** and $p_{95}$ latency bounded at **9.98ms** under $10\times$ connection concurrency."*

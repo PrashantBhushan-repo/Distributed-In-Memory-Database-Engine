@@ -51,6 +51,7 @@ class ReplicaLink {
     [[nodiscard]] const std::string &master_replid() const noexcept { return master_replid_; }
 
     void send_ack_if_due();
+    void set_full_sync_callback(std::function<bool(const db::Keyspace &)> callback) { on_full_sync_ = std::move(callback); }
 
   private:
     void handle_data();
@@ -76,7 +77,11 @@ class ReplicaLink {
     std::uint64_t snapshot_expected_len_{0};
     bool snapshot_hdr_parsed_{false};
 
+    std::function<bool(const db::Keyspace &)> on_full_sync_;
     std::size_t active_db_{0};
+    bool in_transaction_{false};
+    std::vector<proto::Command> transaction_;
+    std::uint64_t transaction_bytes_{0};
     net::TimerId ack_timer_id_{0};
     net::TimerId reconnect_timer_id_{0};
 };

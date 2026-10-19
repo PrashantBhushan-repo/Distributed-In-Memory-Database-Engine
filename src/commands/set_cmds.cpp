@@ -107,7 +107,7 @@ static void handle_scard(const proto::Command &cmd, db::Keyspace &ks, std::size_
 }
 
 void register_set_commands(Dispatcher &dispatcher) {
-    dispatcher.register_command({"SADD", -3, CMD_FLAG_WRITE, handle_sadd});
+    dispatcher.register_command({"SADD", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, handle_sadd});
     dispatcher.register_command({"SREM", -3, CMD_FLAG_WRITE, handle_srem});
     dispatcher.register_command({"SMEMBERS", 2, CMD_FLAG_READONLY, handle_smembers});
     dispatcher.register_command({"SISMEMBER", 3, CMD_FLAG_READONLY, handle_sismember});

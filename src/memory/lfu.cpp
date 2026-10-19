@@ -17,7 +17,7 @@ uint8_t lfu_decay_counter(uint8_t counter, uint32_t ldt, uint32_t now_min, uint3
     if (now_min >= ldt) {
         num_periods = now_min - ldt;
     } else {
-        num_periods = (65535 - ldt) + now_min; // Wrap around for 16-bit ldt
+        num_periods = (65536 - ldt) + now_min; // Wrap around for 16-bit ldt
     }
 
     uint32_t decrement = num_periods / decay_time;

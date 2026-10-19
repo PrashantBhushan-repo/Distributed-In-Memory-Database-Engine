@@ -69,18 +69,19 @@ void PubSubManager::unsubscribe_all(std::shared_ptr<net::Connection> conn) {
     if (!conn) return;
     int fd = conn->fd();
     auto client_it = client_channels_.find(fd);
-    if (client_it != client_channels_.end()) {
+    const bool had_channels = client_it != client_channels_.end();
+    if (had_channels) {
         std::vector<std::string> chs(client_it->second.begin(), client_it->second.end());
         for (const auto &ch : chs) {
             unsubscribe(conn, ch);
         }
     }
-    auto pat_it = client_patterns_.find(fd);
-    if (pat_it != client_patterns_.end()) {
-        std::vector<std::string> pats(pat_it->second.begin(), pat_it->second.end());
-        for (const auto &pat : pats) {
-            punsubscribe(conn, pat);
-        }
+    if (!had_channels) {
+        proto::RespWriter::write_array_header(conn->out_buffer(), 3);
+        proto::RespWriter::write_bulk_string(conn->out_buffer(), "unsubscribe");
+        proto::RespWriter::write_null_bulk(conn->out_buffer());
+        proto::RespWriter::write_integer(conn->out_buffer(), static_cast<std::int64_t>(get_total_sub_count(fd, client_channels_, client_patterns_)));
+        conn->flush();
     }
 }
 
@@ -130,7 +131,13 @@ void PubSubManager::punsubscribe_all(std::shared_ptr<net::Connection> conn) {
     if (!conn) return;
     int fd = conn->fd();
     auto pat_it = client_patterns_.find(fd);
-    if (pat_it != client_patterns_.end()) {
+    if (pat_it == client_patterns_.end()) {
+        proto::RespWriter::write_array_header(conn->out_buffer(), 3);
+        proto::RespWriter::write_bulk_string(conn->out_buffer(), "punsubscribe");
+        proto::RespWriter::write_null_bulk(conn->out_buffer());
+        proto::RespWriter::write_integer(conn->out_buffer(), static_cast<std::int64_t>(get_total_sub_count(fd, client_channels_, client_patterns_)));
+        conn->flush();
+    } else {
         std::vector<std::string> pats(pat_it->second.begin(), pat_it->second.end());
         for (const auto &pat : pats) {
             punsubscribe(conn, pat);

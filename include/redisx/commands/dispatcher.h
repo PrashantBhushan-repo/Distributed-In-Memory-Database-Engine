@@ -46,6 +46,10 @@ class Dispatcher {
     void register_command(CommandSpec spec);
     [[nodiscard]] const CommandSpec *find_command(std::string_view name) const;
 
+    [[nodiscard]] std::vector<CommandSpec> command_specs() const;
+    using WriteObserver = std::function<bool(const proto::Command &, db::Keyspace &, std::size_t, std::string_view)>;
+    void set_write_guard(std::function<bool()> guard) { write_guard_ = std::move(guard); }
+    void set_write_observer(WriteObserver observer) { write_observer_ = std::move(observer); }
     void dispatch(
         const proto::Command &cmd,
         db::Keyspace &keyspace,
@@ -58,6 +62,8 @@ class Dispatcher {
 
   private:
     std::unordered_map<std::string, CommandSpec> commands_;
+    WriteObserver write_observer_;
+    std::function<bool()> write_guard_;
 };
 
 } // namespace redisx::commands

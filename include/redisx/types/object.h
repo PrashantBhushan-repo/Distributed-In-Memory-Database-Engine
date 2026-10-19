@@ -84,6 +84,7 @@ class Object {
     ObjectType type() const noexcept { return type_; }
     Encoding encoding() const noexcept { return encoding_; }
 
+    [[nodiscard]] size_t memory_usage() const; // Dynamic storage estimate; excludes this Object.
     // String operations
     [[nodiscard]] const std::string &as_string() const;
     [[nodiscard]] std::string &as_string();

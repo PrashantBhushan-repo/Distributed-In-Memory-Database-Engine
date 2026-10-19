@@ -27,7 +27,8 @@ void ReplStream::add_replica(std::shared_ptr<net::Connection> conn, std::uint16_
     ReplicaClientInfo info;
     info.conn = conn;
     info.listening_port = listening_port;
-    info.ack_offset = replid_mgr_.master_repl_offset();
+    info.ack_offset = 0;
+    active_stream_db_ = db::Keyspace::NUM_DATABASES;
     info.last_ack_time_ms = core::monotonic_now_ms();
     info.online = true;
     replicas_[fd] = info;
@@ -45,7 +46,7 @@ void ReplStream::remove_replica(int fd) {
 void ReplStream::update_replica_ack(int fd, std::uint64_t ack_offset, std::uint64_t now_ms) {
     auto it = replicas_.find(fd);
     if (it != replicas_.end()) {
-        it->second.ack_offset = ack_offset;
+        it->second.ack_offset = std::min(ack_offset, replid_mgr_.master_repl_offset());
         it->second.last_ack_time_ms = now_ms;
     }
 }
@@ -86,53 +87,15 @@ void ReplStream::propagate_command(
     if (cmd.empty()) return;
 
     std::string name = cmd.name_upper();
+    if (name == "MULTI" && transaction_depth_++ != 0) return;
+    if (name == "EXEC") { if (!transaction_depth_ || --transaction_depth_ != 0) return; }
 
     ensure_db_selected(db_idx);
 
-    std::vector<std::string> rewritten_args;
-
-    if (name == "EXPIRE" || name == "PEXPIRE" || name == "EXPIREAT" || name == "PEXPIREAT" || name == "SETEX") {
-        if (name == "SETEX" && cmd.arg_count() >= 4) {
-            std::string key = cmd.arg(1);
-            std::string val = cmd.arg(3);
-            std::uint64_t ttl_sec = std::stoull(cmd.arg(2));
-            std::uint64_t expire_at_ms = core::monotonic_now_ms() + ttl_sec * 1000;
-
-            std::string set_bytes = format_resp_array({"SET", key, val});
-            backlog_.write(set_bytes, replid_mgr_);
-            send_bytes_to_all(set_bytes);
-
-            rewritten_args = std::vector<std::string>{"PEXPIREAT", key, std::to_string(expire_at_ms)};
-        } else if (cmd.arg_count() >= 3) {
-            std::string key = cmd.arg(1);
-            std::int64_t val = std::stoll(cmd.arg(2));
-            std::uint64_t expire_at_ms = 0;
-            std::uint64_t now_ms = core::monotonic_now_ms();
-
-            if (name == "EXPIRE") expire_at_ms = now_ms + static_cast<std::uint64_t>(val) * 1000;
-            else if (name == "PEXPIRE") expire_at_ms = now_ms + static_cast<std::uint64_t>(val);
-            else if (name == "EXPIREAT") expire_at_ms = static_cast<std::uint64_t>(val) * 1000;
-            else expire_at_ms = static_cast<std::uint64_t>(val);
-
-            rewritten_args = std::vector<std::string>{"PEXPIREAT", key, std::to_string(expire_at_ms)};
-        }
-    } else if (name == "INCRBYFLOAT" && cmd.arg_count() >= 3) {
-        std::string key = cmd.arg(1);
-        auto entry = keyspace.db_get(db_idx, key);
-        if (entry && entry->value.is_string()) {
-            rewritten_args = std::vector<std::string>{"SET", key, entry->value.as_string()};
-        } else {
-            rewritten_args = cmd.args();
-        }
-    } else {
-        rewritten_args = cmd.args();
-    }
-
-    if (!rewritten_args.empty()) {
-        std::string bytes = format_resp_array(rewritten_args);
-        backlog_.write(bytes, replid_mgr_);
-        send_bytes_to_all(bytes);
-    }
+    (void)keyspace;
+    const auto bytes = format_resp_array(cmd.args());
+    backlog_.write(bytes, replid_mgr_);
+    send_bytes_to_all(bytes);
 }
 
 void ReplStream::send_bytes_to_all(const std::string &bytes) {

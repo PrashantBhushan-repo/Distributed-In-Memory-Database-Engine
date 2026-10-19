@@ -12,7 +12,8 @@ namespace redisx::commands {
 
 void register_admin_commands(
     Dispatcher &dispatcher,
-    std::unordered_map<int, std::shared_ptr<net::Connection>> &active_clients
+    std::unordered_map<int, std::shared_ptr<net::Connection>> &active_clients,
+    std::function<std::shared_ptr<net::Connection>()> current_client = {}
 );
 
 } // namespace redisx::commands

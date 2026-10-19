@@ -44,6 +44,7 @@ class Quicklist {
 
     [[nodiscard]] std::vector<std::string> range(ptrdiff_t start, ptrdiff_t stop) const;
 
+    [[nodiscard]] size_t memory_usage() const;
     [[nodiscard]] size_t len() const noexcept { return count_; }
     [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
 

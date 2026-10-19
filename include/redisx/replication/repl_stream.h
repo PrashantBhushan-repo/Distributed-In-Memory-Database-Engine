@@ -58,6 +58,7 @@ class ReplStream {
     ReplBacklog &backlog_;
     std::unordered_map<int, ReplicaClientInfo> replicas_;
     std::size_t active_stream_db_{0};
+    unsigned transaction_depth_{0};
 };
 
 } // namespace redisx::replication

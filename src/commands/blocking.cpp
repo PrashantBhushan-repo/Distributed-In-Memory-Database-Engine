@@ -3,8 +3,18 @@
 #include "redisx/pubsub/keyspace_notify.h"
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
+#include <stdexcept>
 
 namespace redisx::commands {
+static double parse_timeout(const std::string &value) {
+    double result = 0;
+    auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), result);
+    if (error != std::errc{} || end != value.data() + value.size() || !std::isfinite(result) || result < 0 || result > 9e12)
+        throw std::invalid_argument("timeout");
+    return result;
+}
 
 void BlockedClientsManager::block_client(
     std::shared_ptr<net::Connection> conn,
@@ -18,6 +28,8 @@ void BlockedClientsManager::block_client(
 ) {
     if (!conn) return;
     int fd = conn->fd();
+    remove_client(fd);
+    conn->pause_reading();
 
     auto info = std::make_shared<BlockedClientInfo>();
     info->fd = fd;
@@ -80,107 +92,33 @@ void BlockedClientsManager::remove_client(int fd) {
                 }
             }
         }
+        auto conn = info->conn.lock();
         client_info_map_.erase(it);
+        if (conn) conn->resume_reading();
     }
 }
 
-void BlockedClientsManager::drain_ready_keys(
-    db::Keyspace &keyspace,
-    const Dispatcher &,
-    tx::WatchManager *watch_mgr,
-    pubsub::PubSubManager *pubsub_mgr
-) {
+void BlockedClientsManager::drain_ready_keys(db::Keyspace &keyspace, const Dispatcher &dispatcher,
+    tx::WatchManager *, pubsub::PubSubManager *) {
     while (!ready_keys_.empty()) {
-        auto pair = ready_keys_.front();
-        ready_keys_.erase(ready_keys_.begin());
-
-        std::size_t db_idx = pair.first;
-        std::string key = pair.second;
-
-        auto map_it = blocked_map_.find(pair);
-        if (map_it == blocked_map_.end() || map_it->second.empty()) {
-            continue;
-        }
-
-        while (!map_it->second.empty()) {
-            auto *entry = keyspace.db_get(db_idx, key);
-            if (!entry || entry->value.type() != types::ObjectType::List) {
-                break;
-            }
-            auto &obj = entry->value.object();
-            if (obj.list_len() == 0) {
-                break;
-            }
-
-            auto client_info = map_it->second.front();
-            map_it->second.pop_front();
-
-            auto conn = client_info->conn.lock();
-            int fd = client_info->fd;
-
-            if (!conn || conn->state() != net::ConnectionState::Connected) {
-                remove_client(fd);
-                continue;
-            }
-
-            std::optional<std::string> popped;
-            if (client_info->is_left_pop) {
-                popped = obj.list_pop_front();
-            } else {
-                popped = obj.list_pop_back();
-            }
-
-            if (obj.list_len() == 0) {
-                keyspace.db_delete(db_idx, key);
-            }
-
-            if (watch_mgr) {
-                watch_mgr->touch_key(db_idx, key);
-            }
-            if (pubsub_mgr) {
-                pubsub::notify_keyspace_event(*pubsub_mgr, db_idx, client_info->is_left_pop ? "lpop" : "rpop", key, 'l');
-            }
-
-            if (popped.has_value()) {
-                std::string val = popped.value();
-
-                if (client_info->op_type == BlockingOpType::BLMOVE || client_info->op_type == BlockingOpType::BRPOPLPUSH) {
-                    auto *target_entry = keyspace.db_get(db_idx, client_info->target_key);
-                    if (!target_entry) {
-                        types::Object new_obj = types::Object::create_list();
-                        if (client_info->is_left_push) {
-                            new_obj.list_push_front(val);
-                        } else {
-                            new_obj.list_push_back(val);
-                        }
-                        keyspace.db_set(db_idx, client_info->target_key, db::Value(std::move(new_obj)));
-                    } else if (target_entry->value.type() == types::ObjectType::List) {
-                        if (client_info->is_left_push) {
-                            target_entry->value.object().list_push_front(val);
-                        } else {
-                            target_entry->value.object().list_push_back(val);
-                        }
-                    }
-
-                    if (watch_mgr) watch_mgr->touch_key(db_idx, client_info->target_key);
-                    if (pubsub_mgr) pubsub::notify_keyspace_event(*pubsub_mgr, db_idx, client_info->is_left_push ? "lpush" : "rpush", client_info->target_key, 'l');
-
-                    signal_ready_key(db_idx, client_info->target_key);
-
-                    proto::RespWriter::write_bulk_string(conn->out_buffer(), val);
-                } else {
-                    proto::RespWriter::write_array_header(conn->out_buffer(), 2);
-                    proto::RespWriter::write_bulk_string(conn->out_buffer(), key);
-                    proto::RespWriter::write_bulk_string(conn->out_buffer(), val);
-                }
-                conn->flush();
-            }
-
-            remove_client(fd);
-        }
-
-        if (map_it->second.empty()) {
-            blocked_map_.erase(map_it);
+        auto pair = ready_keys_.front(); ready_keys_.erase(ready_keys_.begin());
+        while (true) {
+            auto found = blocked_map_.find(pair);
+            if (found == blocked_map_.end() || found->second.empty()) break;
+            auto info = found->second.front();
+            auto conn = info->conn.lock();
+            if (!conn || conn->state() != net::ConnectionState::Connected) { remove_client(info->fd); continue; }
+            std::vector<std::string> args;
+            if (info->op_type == BlockingOpType::BLPOP || info->op_type == BlockingOpType::BRPOP)
+                args = {info->is_left_pop ? "BLPOP" : "BRPOP", pair.second, "0"};
+            else args = {"BLMOVE", pair.second, info->target_key, info->is_left_pop ? "LEFT" : "RIGHT", info->is_left_push ? "LEFT" : "RIGHT", "0"};
+            core::Buffer reply;
+            auto selected = info->db_idx;
+            dispatcher.dispatch(proto::Command(args), keyspace, info->db_idx, reply, selected);
+            if (reply.peek_string_view().starts_with("+PARK_")) break;
+            conn->out_buffer().append(reply.peek_string_view());
+            conn->flush();
+            remove_client(info->fd);
         }
     }
 }
@@ -192,7 +130,7 @@ void register_blocking_commands(
     pubsub::PubSubManager *
 ) {
     // BLPOP key [key ...] timeout
-    dispatcher.register_command({"BLPOP", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, [&blocked_mgr](
+    dispatcher.register_command({"BLPOP", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, [](
                                                                                      const proto::Command &cmd,
                                                                                      db::Keyspace &keyspace,
                                                                                      std::size_t db_idx,
@@ -201,7 +139,7 @@ void register_blocking_commands(
                                                                                  ) {
         double timeout_sec = 0.0;
         try {
-            timeout_sec = std::stod(cmd.arg(cmd.arg_count() - 1));
+            timeout_sec = parse_timeout(cmd.arg(cmd.arg_count() - 1));
             (void)timeout_sec;
         } catch (...) {
             proto::RespWriter::write_error(out_buf, "ERR timeout is not a float or out of range");
@@ -216,6 +154,9 @@ void register_blocking_commands(
         // Synchronous check if key has element
         for (const auto &key : keys) {
             auto *entry = keyspace.db_get(db_idx, key);
+            if (entry && entry->value.type() != types::ObjectType::List) {
+                proto::RespWriter::write_error(out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value"); return;
+            }
             if (entry && entry->value.type() == types::ObjectType::List) {
                 auto &obj = entry->value.object();
                 if (obj.list_len() > 0) {
@@ -238,7 +179,7 @@ void register_blocking_commands(
     }});
 
     // BRPOP key [key ...] timeout
-    dispatcher.register_command({"BRPOP", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, [&blocked_mgr](
+    dispatcher.register_command({"BRPOP", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, [](
                                                                                      const proto::Command &cmd,
                                                                                      db::Keyspace &keyspace,
                                                                                      std::size_t db_idx,
@@ -247,7 +188,7 @@ void register_blocking_commands(
                                                                                  ) {
         double timeout_sec = 0.0;
         try {
-            timeout_sec = std::stod(cmd.arg(cmd.arg_count() - 1));
+            timeout_sec = parse_timeout(cmd.arg(cmd.arg_count() - 1));
             (void)timeout_sec;
         } catch (...) {
             proto::RespWriter::write_error(out_buf, "ERR timeout is not a float or out of range");
@@ -262,6 +203,9 @@ void register_blocking_commands(
         // Synchronous check
         for (const auto &key : keys) {
             auto *entry = keyspace.db_get(db_idx, key);
+            if (entry && entry->value.type() != types::ObjectType::List) {
+                proto::RespWriter::write_error(out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value"); return;
+            }
             if (entry && entry->value.type() == types::ObjectType::List) {
                 auto &obj = entry->value.object();
                 if (obj.list_len() > 0) {
@@ -300,17 +244,24 @@ void register_blocking_commands(
         std::transform(whereto.begin(), whereto.end(), whereto.begin(), ::toupper);
 
         try {
-            timeout_sec = std::stod(cmd.arg(5));
+            timeout_sec = parse_timeout(cmd.arg(5));
             (void)timeout_sec;
         } catch (...) {
             proto::RespWriter::write_error(out_buf, "ERR timeout is not a float or out of range");
             return;
         }
 
+        if ((wherefrom != "LEFT" && wherefrom != "RIGHT") || (whereto != "LEFT" && whereto != "RIGHT")) {
+            proto::RespWriter::write_error(out_buf, "ERR syntax error"); return;
+        }
         bool left_pop = (wherefrom == "LEFT");
         bool left_push = (whereto == "LEFT");
 
+        auto *destination = keyspace.db_get(db_idx, dst);
         auto *entry = keyspace.db_get(db_idx, src);
+        if ((destination && destination->value.type() != types::ObjectType::List) || (entry && entry->value.type() != types::ObjectType::List)) {
+            proto::RespWriter::write_error(out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value"); return;
+        }
         if (entry && entry->value.type() == types::ObjectType::List) {
             auto &obj = entry->value.object();
             if (obj.list_len() > 0) {
@@ -352,14 +303,18 @@ void register_blocking_commands(
         std::string dst = cmd.arg(2);
         double timeout_sec = 0.0;
         try {
-            timeout_sec = std::stod(cmd.arg(3));
+            timeout_sec = parse_timeout(cmd.arg(3));
             (void)timeout_sec;
         } catch (...) {
             proto::RespWriter::write_error(out_buf, "ERR timeout is not a float or out of range");
             return;
         }
 
+        auto *destination = keyspace.db_get(db_idx, dst);
         auto *entry = keyspace.db_get(db_idx, src);
+        if ((destination && destination->value.type() != types::ObjectType::List) || (entry && entry->value.type() != types::ObjectType::List)) {
+            proto::RespWriter::write_error(out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value"); return;
+        }
         if (entry && entry->value.type() == types::ObjectType::List) {
             auto &obj = entry->value.object();
             if (obj.list_len() > 0) {

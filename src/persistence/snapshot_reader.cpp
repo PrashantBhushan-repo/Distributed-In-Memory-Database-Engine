@@ -3,6 +3,7 @@
 #include "redisx/core/logging.h"
 #include "redisx/core/time.h"
 
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <vector>
@@ -16,7 +17,7 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
     }
 
     std::streamsize filesize = in.tellg();
-    if (filesize < 18) { // 6 magic + 4 version + 1 OP_EOF + 8 CRC = 19 min size
+    if (filesize < 19) { // 6 magic + 4 version + 1 OP_EOF + 8 CRC = 19 min size
         REDISX_LOG_ERROR("Snapshot file too small: %s", filepath.c_str());
         return core::ErrorCode::ProtocolError;
     }
@@ -28,8 +29,17 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
         return core::ErrorCode::IoError;
     }
 
+    const std::string_view stored_version(reinterpret_cast<const char *>(buffer.data() + 6), 4);
+    const auto checksum = stored_version == "0001" ? legacy_crc64_v1 : crc64;
+    std::uint64_t footer_crc = 0;
+    std::memcpy(&footer_crc, buffer.data() + buffer.size() - sizeof(footer_crc), sizeof(footer_crc));
+    if (checksum(0, buffer.data(), buffer.size() - sizeof(footer_crc)) != footer_crc) {
+        return core::ErrorCode::ProtocolError;
+    }
+    db::Keyspace pending;
+
     std::size_t offset = 0;
-    std::size_t total_len = buffer.size();
+    std::size_t total_len = buffer.size() - sizeof(std::uint64_t);
 
     // 1. Verify Magic & Version
     if (total_len < 10) return core::ErrorCode::ProtocolError;
@@ -37,7 +47,7 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
     std::string_view version(reinterpret_cast<const char *>(buffer.data() + 6), 4);
     offset += 10;
 
-    if (magic != RDB_MAGIC || version != RDB_VERSION) {
+    if (magic != RDB_MAGIC || (version != RDB_VERSION && version != "0001")) {
         REDISX_LOG_ERROR("Snapshot header mismatch (magic=%.6s ver=%.4s)", magic.data(), version.data());
         return core::ErrorCode::ProtocolError;
     }
@@ -47,13 +57,13 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
     std::uint64_t running_crc = 0;
 
     // Running CRC over header
-    running_crc = crc64(running_crc, buffer.data(), 10);
+    running_crc = checksum(running_crc, buffer.data(), 10);
 
     // Lambda helpers
     auto read_bytes = [&](void *dest, std::size_t len) -> bool {
-        if (offset + len > total_len) return false;
+        if (len > total_len - offset) return false;
         std::memcpy(dest, buffer.data() + offset, len);
-        running_crc = crc64(running_crc, buffer.data() + offset, len);
+        running_crc = checksum(running_crc, buffer.data() + offset, len);
         offset += len;
         return true;
     };
@@ -61,13 +71,14 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
     auto read_varint = [&](std::size_t &out_len) -> bool {
         std::size_t start = offset;
         if (!decode_varint(buffer.data(), total_len, offset, out_len)) return false;
-        running_crc = crc64(running_crc, buffer.data() + start, offset - start);
+        running_crc = checksum(running_crc, buffer.data() + start, offset - start);
         return true;
     };
 
     auto read_string = [&](std::string &out_str) -> bool {
         std::size_t len = 0;
         if (!read_varint(len)) return false;
+        if (len > total_len - offset) return false;
         out_str.resize(len);
         if (len > 0) {
             if (!read_bytes(out_str.data(), len)) return false;
@@ -151,16 +162,18 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
                 double score = 0.0;
                 std::string member;
                 if (!read_bytes(&score, sizeof(score))) return core::ErrorCode::ProtocolError;
+                if (std::isnan(score)) return core::ErrorCode::ProtocolError;
                 if (!read_string(member)) return core::ErrorCode::ProtocolError;
                 obj.zset_add(score, member);
             }
             break;
         }
+        default: return core::ErrorCode::ProtocolError;
         }
 
         // Check if expired
         if (expire_at_ms == 0 || expire_at_ms > now_ms) {
-            keyspace.db_set(current_db, std::move(key), db::Value(std::move(obj)), expire_at_ms);
+            pending.db_set(current_db, std::move(key), db::Value(std::move(obj)), expire_at_ms);
         }
     }
 
@@ -169,21 +182,10 @@ core::Result<void> SnapshotReader::load_snapshot(db::Keyspace &keyspace, const s
         return core::ErrorCode::ProtocolError;
     }
 
-    // 3. Verify CRC64 Checksum
-    std::uint64_t expected_crc = 0;
-    if (offset + sizeof(expected_crc) > total_len) {
-        REDISX_LOG_ERROR("Missing CRC64 checksum in snapshot");
-        return core::ErrorCode::ProtocolError;
+    if (offset != total_len || running_crc != footer_crc) return core::ErrorCode::ProtocolError;
+    for (std::size_t i = 0; i < db::Keyspace::NUM_DATABASES; ++i) {
+        keyspace.get_db(i) = std::move(pending.get_db(i));
     }
-    std::memcpy(&expected_crc, buffer.data() + offset, sizeof(expected_crc));
-
-    if (running_crc != expected_crc) {
-        REDISX_LOG_ERROR("Snapshot CRC64 mismatch: computed=0x%llx expected=0x%llx",
-                          static_cast<unsigned long long>(running_crc),
-                          static_cast<unsigned long long>(expected_crc));
-        return core::ErrorCode::ProtocolError;
-    }
-
     return {};
 }
 

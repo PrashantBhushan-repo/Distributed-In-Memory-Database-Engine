@@ -1,6 +1,7 @@
 #ifndef REDISX_PERSISTENCE_FORMAT_H
 #define REDISX_PERSISTENCE_FORMAT_H
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -11,7 +12,7 @@ namespace redisx::persistence {
 
 // File header signatures
 inline constexpr std::string_view RDB_MAGIC = "REDISX";
-inline constexpr std::string_view RDB_VERSION = "0001";
+inline constexpr std::string_view RDB_VERSION = "0002";
 
 // RDB Opcodes
 enum class Opcode : std::uint8_t {
@@ -31,7 +32,7 @@ enum class RdbType : std::uint8_t {
 };
 
 // Standard Redis CRC64 Polynomial (64-bit IEEE)
-inline std::uint64_t crc64(std::uint64_t crc, const void *buf, std::size_t len) noexcept {
+inline std::uint64_t legacy_crc64_v1(std::uint64_t crc, const void *buf, std::size_t len) noexcept {
     static const std::uint64_t table[256] = {
         0x0000000000000000ULL, 0x7ad870c830358973ULL, 0xf5b0e190606b12e6ULL, 0x8f689158505e9b95ULL,
         0xf66136bf30d625cdULL, 0x8cb9467700e3acbeULL, 0x03d1d72f50bd372bULL, 0x7909a7e76088be58ULL,
@@ -73,6 +74,23 @@ inline std::uint64_t crc64(std::uint64_t crc, const void *buf, std::size_t len) 
         res = table[(res ^ bytes[i]) & 0xFF] ^ (res >> 8);
     }
     return res;
+}
+
+// Reflected CRC-64/Jones, used by Redis. Build all 256 entries rather than
+// silently zero-filling half a hand-copied table. The v1 reader is migration-only.
+inline std::uint64_t crc64(std::uint64_t crc, const void *data, std::size_t length) noexcept {
+    static const auto table = [] {
+        std::array<std::uint64_t, 256> result{};
+        for (std::size_t i = 0; i < result.size(); ++i) {
+            auto value = static_cast<std::uint64_t>(i);
+            for (int bit = 0; bit < 8; ++bit) value = (value >> 1) ^ ((value & 1) ? 0x95ac9329ac4bc9b5ULL : 0);
+            result[i] = value;
+        }
+        return result;
+    }();
+    const auto *bytes = static_cast<const std::uint8_t *>(data);
+    for (std::size_t i = 0; i < length; ++i) crc = table[(crc ^ bytes[i]) & 0xff] ^ (crc >> 8);
+    return crc;
 }
 
 // Helpers for Redis-style variable-length integer encoding

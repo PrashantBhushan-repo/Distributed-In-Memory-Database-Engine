@@ -1,286 +1,75 @@
 #include "redisx/commands/expire_cmds.h"
 #include "redisx/proto/resp_writer.h"
-
 #include <charconv>
-#include <cstdint>
-#include <string>
-#include <string_view>
+#include <cctype>
+#include <limits>
 
 namespace redisx::commands {
-
 namespace {
-
-bool parse_int64(std::string_view sv, std::int64_t &out) {
-    if (sv.empty()) {
-        return false;
+void expire_command(const proto::Command &cmd, db::Keyspace &keys, std::size_t db,
+                    core::Buffer &out, db::TTLManager &ttl, bool absolute, std::int64_t scale) {
+    std::int64_t value = 0;
+    const auto &text = cmd.arg(2);
+    auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error != std::errc{} || end != text.data() + text.size() ||
+        value > std::numeric_limits<std::int64_t>::max() / scale ||
+        value < std::numeric_limits<std::int64_t>::min() / scale) {
+        proto::RespWriter::write_error(out, "ERR value is not an integer or out of range"); return;
     }
-    const char *begin = sv.data();
-    const char *end = sv.data() + sv.size();
-    auto [ptr, ec] = std::from_chars(begin, end, out);
-    return (ec == std::errc{} && ptr == end);
-}
-
-std::string to_upper(std::string_view sv) {
-    std::string s;
-    s.reserve(sv.size());
-    for (char c : sv) {
-        s.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+    bool nx = false, xx = false, gt = false, lt = false;
+    for (std::size_t i = 3; i < cmd.arg_count(); ++i) {
+        std::string option = cmd.arg(i);
+        for (char &c : option) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        if (option == "NX") nx = true;
+        else if (option == "XX") xx = true;
+        else if (option == "GT") gt = true;
+        else if (option == "LT") lt = true;
+        else { proto::RespWriter::write_error(out, "ERR unsupported option " + option); return; }
     }
-    return s;
-}
-
-enum class ExpireOption { None, NX, XX, GT, LT };
-
-bool validate_expire_condition(ExpireOption opt, std::int64_t current_ttl_ms, std::uint64_t new_expire_at_ms,
-                               std::uint64_t current_expire_at_ms) {
-    switch (opt) {
-    case ExpireOption::None:
-        return true;
-    case ExpireOption::NX:
-        return (current_ttl_ms == -1); // Only when key has NO TTL
-    case ExpireOption::XX:
-        return (current_ttl_ms >= 0);  // Only when key HAS a TTL
-    case ExpireOption::GT:
-        return (current_ttl_ms >= 0 && new_expire_at_ms > current_expire_at_ms);
-    case ExpireOption::LT:
-        return (current_ttl_ms < 0 || new_expire_at_ms < current_expire_at_ms);
+    if ((nx && (xx || gt || lt)) || (gt && lt)) {
+        proto::RespWriter::write_error(out, "ERR NX and XX, GT or LT options at the same time are not compatible"); return;
     }
-    return true;
+    const auto now = ttl.time_provider().wall_now_ms();
+    const auto delta = value * scale;
+    if (!absolute && delta > 0 && static_cast<std::uint64_t>(delta) >
+        static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) - now) {
+        proto::RespWriter::write_error(out, "ERR invalid expire time"); return;
+    }
+    const std::uint64_t deadline = delta <= 0 ? 0 : absolute ? static_cast<std::uint64_t>(delta) : now + static_cast<std::uint64_t>(delta);
+    const auto current_ttl = ttl.get_ttl_ms(keys, db, cmd.arg(1));
+    if (current_ttl == -2) { proto::RespWriter::write_integer(out, 0); return; }
+    const auto *entry = keys.get_db(db).find(cmd.arg(1));
+    const auto existing = entry ? entry->expire_at_ms : 0;
+    if ((nx && existing != 0) || (xx && existing == 0) ||
+        (gt && (existing == 0 || deadline <= existing)) ||
+        (lt && existing != 0 && deadline >= existing)) {
+        proto::RespWriter::write_integer(out, 0); return;
+    }
+    if (deadline <= now) keys.db_delete(db, cmd.arg(1));
+    else ttl.set_expire_at(keys, db, cmd.arg(1), deadline);
+    proto::RespWriter::write_integer(out, 1);
 }
-
 } // namespace
-
-void register_expire_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr) {
-    // ------------------------------------------------------------
-    // EXPIRE key seconds [NX|XX|GT|LT]
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "EXPIRE",
-        -3,
-        CMD_FLAG_WRITE,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            const std::string &key = cmd.arg(1);
-            std::int64_t seconds = 0;
-            if (!parse_int64(cmd.arg(2), seconds)) {
-                proto::RespWriter::write_error(out_buf, "ERR value is not an integer or out of range");
-                return;
-            }
-
-            ExpireOption opt = ExpireOption::None;
-            if (cmd.arg_count() >= 4) {
-                std::string opt_str = to_upper(cmd.arg(3));
-                if (opt_str == "NX") opt = ExpireOption::NX;
-                else if (opt_str == "XX") opt = ExpireOption::XX;
-                else if (opt_str == "GT") opt = ExpireOption::GT;
-                else if (opt_str == "LT") opt = ExpireOption::LT;
-                else {
-                    proto::RespWriter::write_error(out_buf, "ERR unsupported option");
-                    return;
-                }
-            }
-
-            std::int64_t curr_ttl = ttl_mgr.get_ttl_ms(keyspace, db_idx, key);
-            if (curr_ttl == -2) { // Key does not exist
-                proto::RespWriter::write_integer(out_buf, 0);
-                return;
-            }
-
-            std::uint64_t now = ttl_mgr.time_provider().monotonic_now_ms();
-            std::uint64_t new_expire_at = (seconds > 0) ? (now + static_cast<std::uint64_t>(seconds) * 1000) : 0;
-            
-            db::Entry *e = keyspace.db_get(db_idx, key);
-            std::uint64_t curr_expire_at = (e != nullptr) ? e->expire_at_ms : 0;
-
-            if (!validate_expire_condition(opt, curr_ttl, new_expire_at, curr_expire_at)) {
-                proto::RespWriter::write_integer(out_buf, 0);
-                return;
-            }
-
-            if (seconds <= 0) {
-                keyspace.db_delete(db_idx, key);
-                proto::RespWriter::write_integer(out_buf, 1);
-                return;
-            }
-
-            ttl_mgr.set_expire_at(keyspace, db_idx, key, new_expire_at);
-            proto::RespWriter::write_integer(out_buf, 1);
-        }
-    });
-
-    // ------------------------------------------------------------
-    // PEXPIRE key milliseconds [NX|XX|GT|LT]
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "PEXPIRE",
-        -3,
-        CMD_FLAG_WRITE,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            const std::string &key = cmd.arg(1);
-            std::int64_t ms = 0;
-            if (!parse_int64(cmd.arg(2), ms)) {
-                proto::RespWriter::write_error(out_buf, "ERR value is not an integer or out of range");
-                return;
-            }
-
-            ExpireOption opt = ExpireOption::None;
-            if (cmd.arg_count() >= 4) {
-                std::string opt_str = to_upper(cmd.arg(3));
-                if (opt_str == "NX") opt = ExpireOption::NX;
-                else if (opt_str == "XX") opt = ExpireOption::XX;
-                else if (opt_str == "GT") opt = ExpireOption::GT;
-                else if (opt_str == "LT") opt = ExpireOption::LT;
-                else {
-                    proto::RespWriter::write_error(out_buf, "ERR unsupported option");
-                    return;
-                }
-            }
-
-            std::int64_t curr_ttl = ttl_mgr.get_ttl_ms(keyspace, db_idx, key);
-            if (curr_ttl == -2) {
-                proto::RespWriter::write_integer(out_buf, 0);
-                return;
-            }
-
-            std::uint64_t now = ttl_mgr.time_provider().monotonic_now_ms();
-            std::uint64_t new_expire_at = (ms > 0) ? (now + static_cast<std::uint64_t>(ms)) : 0;
-            
-            db::Entry *e = keyspace.db_get(db_idx, key);
-            std::uint64_t curr_expire_at = (e != nullptr) ? e->expire_at_ms : 0;
-
-            if (!validate_expire_condition(opt, curr_ttl, new_expire_at, curr_expire_at)) {
-                proto::RespWriter::write_integer(out_buf, 0);
-                return;
-            }
-
-            if (ms <= 0) {
-                keyspace.db_delete(db_idx, key);
-                proto::RespWriter::write_integer(out_buf, 1);
-                return;
-            }
-
-            ttl_mgr.set_expire_at(keyspace, db_idx, key, new_expire_at);
-            proto::RespWriter::write_integer(out_buf, 1);
-        }
-    });
-
-    // ------------------------------------------------------------
-    // EXPIREAT key timestamp-seconds [NX|XX|GT|LT]
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "EXPIREAT",
-        -3,
-        CMD_FLAG_WRITE,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            const std::string &key = cmd.arg(1);
-            std::int64_t ts_sec = 0;
-            if (!parse_int64(cmd.arg(2), ts_sec)) {
-                proto::RespWriter::write_error(out_buf, "ERR value is not an integer or out of range");
-                return;
-            }
-
-            std::uint64_t expire_at_ms = static_cast<std::uint64_t>(ts_sec) * 1000;
-            std::uint64_t now = ttl_mgr.time_provider().monotonic_now_ms();
-
-            if (expire_at_ms <= now) {
-                if (keyspace.db_delete(db_idx, key)) {
-                    proto::RespWriter::write_integer(out_buf, 1);
-                } else {
-                    proto::RespWriter::write_integer(out_buf, 0);
-                }
-                return;
-            }
-
-            if (ttl_mgr.set_expire_at(keyspace, db_idx, key, expire_at_ms)) {
-                proto::RespWriter::write_integer(out_buf, 1);
-            } else {
-                proto::RespWriter::write_integer(out_buf, 0);
-            }
-        }
-    });
-
-    // ------------------------------------------------------------
-    // PEXPIREAT key timestamp-milliseconds [NX|XX|GT|LT]
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "PEXPIREAT",
-        -3,
-        CMD_FLAG_WRITE,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            const std::string &key = cmd.arg(1);
-            std::int64_t ts_ms = 0;
-            if (!parse_int64(cmd.arg(2), ts_ms)) {
-                proto::RespWriter::write_error(out_buf, "ERR value is not an integer or out of range");
-                return;
-            }
-
-            std::uint64_t expire_at_ms = static_cast<std::uint64_t>(ts_ms);
-            std::uint64_t now = ttl_mgr.time_provider().monotonic_now_ms();
-
-            if (expire_at_ms <= now) {
-                if (keyspace.db_delete(db_idx, key)) {
-                    proto::RespWriter::write_integer(out_buf, 1);
-                } else {
-                    proto::RespWriter::write_integer(out_buf, 0);
-                }
-                return;
-            }
-
-            if (ttl_mgr.set_expire_at(keyspace, db_idx, key, expire_at_ms)) {
-                proto::RespWriter::write_integer(out_buf, 1);
-            } else {
-                proto::RespWriter::write_integer(out_buf, 0);
-            }
-        }
-    });
-
-    // ------------------------------------------------------------
-    // TTL key
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "TTL",
-        2,
-        CMD_FLAG_READONLY,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            std::int64_t ttl_sec = ttl_mgr.get_ttl_seconds(keyspace, db_idx, cmd.arg(1));
-            proto::RespWriter::write_integer(out_buf, ttl_sec);
-        }
-    });
-
-    // ------------------------------------------------------------
-    // PTTL key
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "PTTL",
-        2,
-        CMD_FLAG_READONLY,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            std::int64_t ttl_ms = ttl_mgr.get_ttl_ms(keyspace, db_idx, cmd.arg(1));
-            proto::RespWriter::write_integer(out_buf, ttl_ms);
-        }
-    });
-
-    // ------------------------------------------------------------
-    // PERSIST key
-    // ------------------------------------------------------------
-    dispatcher.register_command({
-        "PERSIST",
-        2,
-        CMD_FLAG_WRITE,
-        [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            if (ttl_mgr.remove_expire(keyspace, db_idx, cmd.arg(1))) {
-                proto::RespWriter::write_integer(out_buf, 1);
-            } else {
-                proto::RespWriter::write_integer(out_buf, 0);
-            }
-        }
-    });
+void register_expire_commands(Dispatcher &dispatcher, db::TTLManager &ttl) {
+    for (const auto &name : {"EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT"}) {
+        const bool absolute = std::string_view(name).ends_with("AT");
+        const std::int64_t scale = name[0] == 'P' ? 1 : 1000;
+        dispatcher.register_command({name, -3, CMD_FLAG_WRITE,
+            [&ttl, absolute, scale](const proto::Command &cmd, db::Keyspace &keys, std::size_t db, core::Buffer &out, std::size_t &) {
+                expire_command(cmd, keys, db, out, ttl, absolute, scale);
+            }});
+    }
+    dispatcher.register_command({"TTL", 2, CMD_FLAG_READONLY,
+        [&ttl](const proto::Command &cmd, db::Keyspace &keys, std::size_t db, core::Buffer &out, std::size_t &) {
+            proto::RespWriter::write_integer(out, ttl.get_ttl_seconds(keys, db, cmd.arg(1)));
+        }});
+    dispatcher.register_command({"PTTL", 2, CMD_FLAG_READONLY,
+        [&ttl](const proto::Command &cmd, db::Keyspace &keys, std::size_t db, core::Buffer &out, std::size_t &) {
+            proto::RespWriter::write_integer(out, ttl.get_ttl_ms(keys, db, cmd.arg(1)));
+        }});
+    dispatcher.register_command({"PERSIST", 2, CMD_FLAG_WRITE,
+        [&ttl](const proto::Command &cmd, db::Keyspace &keys, std::size_t db, core::Buffer &out, std::size_t &) {
+            proto::RespWriter::write_integer(out, ttl.remove_expire(keys, db, cmd.arg(1)) ? 1 : 0);
+        }});
 }
-
 } // namespace redisx::commands

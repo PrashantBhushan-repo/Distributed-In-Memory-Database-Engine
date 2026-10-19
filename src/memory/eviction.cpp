@@ -9,7 +9,7 @@ namespace redisx::memory {
 
 bool EvictionManager::perform_eviction(db::Keyspace &keyspace, db::TTLManager &ttl_mgr) {
     if (maxmemory_ == 0 || policy_ == EvictionPolicy::NoEviction) {
-        return MemoryTracker::instance().used_memory() <= maxmemory_;
+        return maxmemory_ == 0 || MemoryTracker::instance().used_memory() <= maxmemory_;
     }
 
     static thread_local std::mt19937 rng(std::random_device{}());
@@ -30,17 +30,9 @@ bool EvictionManager::perform_eviction(db::Keyspace &keyspace, db::TTLManager &t
                 const auto &dict = keyspace.get_db(db_idx);
                 if (dict.empty()) continue;
 
+                const auto entries = dict.sample_entries(samples_, is_volatile);
                 std::vector<std::string> sample_keys;
-                uint64_t cursor = 0;
-                do {
-                    cursor = dict.scan(cursor, [&](const db::Entry *e) {
-                        if (e != nullptr) {
-                            if (!is_volatile || ttl_mgr.get_ttl_ms(keyspace, db_idx, e->key) >= 0) {
-                                sample_keys.push_back(e->key);
-                            }
-                        }
-                    });
-                } while (cursor != 0);
+                for (const auto *entry : entries) sample_keys.push_back(entry->key);
 
                 if (!sample_keys.empty()) {
                     std::uniform_int_distribution<size_t> dist(0, sample_keys.size() - 1);
@@ -59,17 +51,7 @@ bool EvictionManager::perform_eviction(db::Keyspace &keyspace, db::TTLManager &t
                 const auto &dict = keyspace.get_db(db_idx);
                 if (dict.empty()) continue;
 
-                std::vector<const db::Entry *> sample_entries;
-                uint64_t cursor = 0;
-                do {
-                    cursor = dict.scan(cursor, [&](const db::Entry *e) {
-                        if (e != nullptr) {
-                            if (!is_volatile || ttl_mgr.get_ttl_ms(keyspace, db_idx, e->key) >= 0) {
-                                sample_entries.push_back(e);
-                            }
-                        }
-                    });
-                } while (cursor != 0);
+                auto sample_entries = dict.sample_entries(samples_, is_volatile);
 
                 if (sample_entries.empty()) continue;
 
@@ -88,9 +70,7 @@ bool EvictionManager::perform_eviction(db::Keyspace &keyspace, db::TTLManager &t
                     } else if (policy_ == EvictionPolicy::AllKeysLFU || policy_ == EvictionPolicy::VolatileLFU) {
                         score = 255 - e->lfu_freq; // Higher score = lower frequency = better candidate
                     } else if (policy_ == EvictionPolicy::VolatileTTL) {
-                        int64_t ttl = ttl_mgr.get_ttl_ms(keyspace, db_idx, e->key);
-                        uint64_t ttl_val = (ttl >= 0) ? static_cast<uint64_t>(ttl) : UINT64_MAX;
-                        score = UINT64_MAX - ttl_val;
+                        score = UINT64_MAX - e->expire_at_ms;
                     }
 
                     pool_.push_back({db_idx, e->key, score});
@@ -117,8 +97,7 @@ bool EvictionManager::perform_eviction(db::Keyspace &keyspace, db::TTLManager &t
         ttl_mgr.remove_expire(keyspace, victim_db, victim_key);
         if (keyspace.db_delete(victim_db, victim_key)) {
             evicted_keys_++;
-            // Approximate freed byte accounting
-            MemoryTracker::instance().free(64 + victim_key.size());
+            if (on_evict_) on_evict_(victim_db, victim_key);
         }
     }
 

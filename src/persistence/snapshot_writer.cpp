@@ -3,6 +3,7 @@
 #include "redisx/persistence/format.h"
 #include "redisx/core/logging.h"
 #include "redisx/core/time.h"
+#include "redisx/core/file_io.h"
 
 #include <cstdio>
 #include <cstring>
@@ -37,7 +38,9 @@ bool SnapshotWriter::write_snapshot(const db::Keyspace &keyspace, const std::str
         return false;
     }
 
-    std::string tmp_filepath = filepath + ".tmp";
+    core::TemporaryFile temporary(filepath + ".tmp");
+    const auto &tmp_filepath = temporary.path();
+    if (tmp_filepath.empty()) return false;
     std::ofstream out(tmp_filepath, std::ios::binary);
     if (!out.is_open()) {
         REDISX_LOG_ERROR("Failed to open temp snapshot file: %s", tmp_filepath.c_str());
@@ -144,10 +147,12 @@ bool SnapshotWriter::write_snapshot(const db::Keyspace &keyspace, const std::str
     write_buf(out, crc, &eof_op, 1);
 
     // 4. Write final 8-byte CRC64
-    write_buf(out, crc, &crc, sizeof(crc));
+    out.write(reinterpret_cast<const char *>(&crc), sizeof(crc));
 
     out.flush();
+    if (!out) return false;
     out.close();
+    if (FAILPOINT("fsync") || !core::sync_file(tmp_filepath)) return false;
 
     // Atomic rename
     std::error_code ec;
@@ -157,7 +162,7 @@ bool SnapshotWriter::write_snapshot(const db::Keyspace &keyspace, const std::str
         return false;
     }
 
-    return true;
+    return core::sync_parent_directory(filepath);
 }
 
 } // namespace redisx::persistence

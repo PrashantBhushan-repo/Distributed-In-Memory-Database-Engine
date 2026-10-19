@@ -51,8 +51,10 @@ struct Entry {
     Value value;
     std::uint64_t expire_at_ms{0}; // 0 = no TTL
     std::uint64_t lru_clock{0};
-    std::uint8_t lfu_freq{0};
+    std::uint8_t lfu_freq{5};
+    std::uint32_t lfu_last_decay{0};
     Entry *next{nullptr};
+    std::size_t accounted_bytes{0};
 
     Entry(std::string k, Value v, std::uint64_t exp = 0)
         : key(std::move(k)), value(std::move(v)), expire_at_ms(exp) {}

@@ -53,13 +53,13 @@ TEST(ReplicationUnitTest, BacklogCircularWriteAndPartialResync) {
     EXPECT_TRUE(backlog.can_partial_resync(id_mgr.master_replid(), 31, id_mgr));
 }
 
-TEST(ReplicationUnitTest, DeterministicCommandRewriting) {
+TEST(ReplicationUnitTest, CanonicalCommandsPreserveAbsoluteExpiry) {
     ReplIdManager id_mgr;
     ReplBacklog backlog(1024);
     ReplStream stream(id_mgr, backlog);
     redisx::db::Keyspace keyspace;
 
-    redisx::proto::Command cmd({"EXPIRE", "mykey", "10"});
+    redisx::proto::Command cmd({"PEXPIREAT", "mykey", "10000"});
 
     stream.propagate_command(cmd, keyspace, 0);
 

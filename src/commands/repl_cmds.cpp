@@ -5,6 +5,10 @@
 
 #include <algorithm>
 #include <fstream>
+#include <filesystem>
+#include <unistd.h>
+#include "redisx/commands/numeric.h"
+#include "redisx/core/file_io.h"
 #include <sstream>
 #include <thread>
 #include <chrono>
@@ -38,7 +42,9 @@ void register_repl_commands(Dispatcher &dispatcher, ReplicationContext &repl_ctx
         }
 
         try {
-            std::uint16_t port = static_cast<std::uint16_t>(std::stoul(cmd.arg(2)));
+            auto number = parse_integer(cmd.arg(2));
+            if (number < 1 || number > 65535) throw std::invalid_argument("port");
+            auto port = static_cast<std::uint16_t>(number);
             repl_ctx.replica_link.connect(cmd.arg(1), port, repl_ctx.listening_port);
             proto::RespWriter::write_simple_string(out_buf, "OK");
         } catch (...) {
@@ -46,8 +52,8 @@ void register_repl_commands(Dispatcher &dispatcher, ReplicationContext &repl_ctx
         }
     };
 
-    dispatcher.register_command({"REPLICAOF", -3, CMD_FLAG_ADMIN, handle_replicaof});
-    dispatcher.register_command({"SLAVEOF", -3, CMD_FLAG_ADMIN, handle_replicaof});
+    dispatcher.register_command({"REPLICAOF", 3, CMD_FLAG_ADMIN, handle_replicaof});
+    dispatcher.register_command({"SLAVEOF", 3, CMD_FLAG_ADMIN, handle_replicaof});
 
     // PSYNC replid offset
     dispatcher.register_command({"PSYNC", 3, CMD_FLAG_ADMIN, [&repl_ctx](
@@ -79,11 +85,13 @@ void register_repl_commands(Dispatcher &dispatcher, ReplicationContext &repl_ctx
             out_buf.append(reply.data(), reply.size());
 
             // Dump snapshot to temp file and stream payload
-            std::string snapshot_file = "psync_dump.rdb";
+            core::TemporaryFile snapshot_temp((std::filesystem::temp_directory_path() / "redisx-psync").string());
+            const auto &snapshot_file = snapshot_temp.path();
             persistence::SnapshotWriter writer;
             if (writer.write_snapshot(keyspace, snapshot_file)) {
                 std::ifstream ifs(snapshot_file, std::ios::binary);
                 std::string snapshot_data((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                std::filesystem::remove(snapshot_file);
                 std::string header = "$" + std::to_string(snapshot_data.size()) + "\r\n";
                 out_buf.append(header.data(), header.size());
                 if (!snapshot_data.empty()) {
@@ -97,7 +105,7 @@ void register_repl_commands(Dispatcher &dispatcher, ReplicationContext &repl_ctx
     }});
 
     // REPLCONF [subcommand ...]
-    dispatcher.register_command({"REPLCONF", -2, CMD_FLAG_ADMIN, [&repl_ctx](
+    dispatcher.register_command({"REPLCONF", -2, CMD_FLAG_ADMIN, [](
                                                                       const proto::Command &cmd,
                                                                       db::Keyspace &,
                                                                       std::size_t,
@@ -139,15 +147,9 @@ void register_repl_commands(Dispatcher &dispatcher, ReplicationContext &repl_ctx
         std::uint64_t cur_offset = repl_ctx.replid_mgr.master_repl_offset();
         std::size_t acked = repl_ctx.repl_stream.count_replicas_at_offset(cur_offset);
 
-        // Simple bounded polling for WAIT in synchronous test environments
-        std::uint64_t start_ms = core::monotonic_now_ms();
-        while (acked < target_replicas && timeout_ms > 0) {
-            std::uint64_t elapsed = core::monotonic_now_ms() - start_ms;
-            if (elapsed >= timeout_ms) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            acked = repl_ctx.repl_stream.count_replicas_at_offset(cur_offset);
-        }
-
+        // The network server parks WAIT asynchronously. Direct dispatch returns the current ACK count.
+        (void)timeout_ms;
+        (void)target_replicas;
         proto::RespWriter::write_integer(out_buf, static_cast<std::int64_t>(acked));
     }});
 

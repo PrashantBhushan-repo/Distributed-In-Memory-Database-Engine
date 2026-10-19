@@ -12,7 +12,7 @@ RedisX provides dual durability mechanisms:
 
 ```text
 +------------------+------------------+-------------------+-----------------+
-| Magic ("REDISX") | Version ("0001") | Record Stream...  | EOF Opcode (FF) |
+| Magic ("REDISX") | Version ("0002") | Record Stream...  | EOF Opcode (FF) |
 |     6 bytes      |     4 bytes      | Variable length   |     1 byte      |
 +------------------+------------------+-------------------+-----------------+
 | 8-byte CRC64 Checksum               |
@@ -34,9 +34,9 @@ RedisX provides dual durability mechanisms:
 ### Type Byte Mapping
 - `0`: String
 - `1`: List
-- `2`: Set
-- `3`: ZSet
-- `4`: Hash
+- `2`: Hash
+- `3`: Set
+- `4`: ZSet
 
 ---
 
@@ -49,13 +49,17 @@ AOF stores mutations as standard RESP arrays:
 
 ### Sync Policies
 - `always`: Flush and `fsync()` after every mutating command.
-- `everysec`: Buffer writes and trigger `fsync()` every 1,000 ms.
+- `everysec`: Write commands to the OS immediately and call `fsync()` on the recurring maintenance tick, approximately every 1,000 ms. A stalled event loop or OS can delay this.
 - `no`: Rely on OS buffer flushing.
 
 ---
 
 ## 3. Crash Recovery Protocol
 
-1. Load snapshot file (`dump.rdb`) if present and verify CRC64 checksum.
-2. Replay AOF log (`appendonly.aof`) through the RESP parser.
-3. If `aof-load-truncated` is enabled, partial tail commands resulting from unclean shutdowns are logged with a warning and skipped cleanly.
+1. When append-only persistence is enabled and the configured AOF exists, replay that complete log as the authoritative source. Do not also apply a snapshot, which would double-apply increments and list operations.
+2. Otherwise, load the configured snapshot. Verify its full checksum and structure into a temporary keyspace before replacing live databases.
+3. With `aof-load-truncated yes`, truncate incomplete tail commands or an incomplete `MULTI` transaction to the last complete boundary before accepting new appends. Unknown commands and malformed data fail recovery.
+
+Snapshots use RedisX's own format, not the Redis RDB format. Version 0002 uses CRC64/Jones; version 0001 remains readable with its historical checksum algorithm. Expiration timestamps are Unix milliseconds. Files use the platform's existing little-endian representation; cross-endian portability is not certified.
+
+`SAVE` is synchronous. `BGSAVE` and `BGREWRITEAOF` use fork snapshots and are reaped by the event loop. Rewrites retain writes made after the fork before atomically replacing and syncing the log. `always` acknowledges only after the append and fsync succeed; disk errors return `MISCONF` and disable subsequent mutations. A failed write may already be visible in memory and must be treated as an uncertain outcome by a client.

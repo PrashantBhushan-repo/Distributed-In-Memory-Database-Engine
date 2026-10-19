@@ -19,6 +19,14 @@ class RespReader {
     static core::Result<std::optional<Command>> parse(core::Buffer &in_buf);
 };
 
+// Per-client parser: retains array progress between reads without rescanning completed arguments.
+class StreamingRespReader {
+public:
+    core::Result<std::optional<Command>> parse(core::Buffer &input);
+private:
+    std::optional<std::size_t> remaining_, bulk_length_;
+    std::vector<std::string> args_;
+};
 } // namespace redisx::proto
 
 #endif // REDISX_PROTO_RESP_READER_H

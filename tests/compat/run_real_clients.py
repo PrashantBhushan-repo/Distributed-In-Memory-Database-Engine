@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
-"""
-RedisX Stage 11 — Real Client Compatibility Suite
-Tests RedisX against:
-1. Native socket RESP protocol conformance
-2. redis-py compatibility (Strings, Lists, Hashes, Sets, Sorted Sets, Transactions)
-3. redis-cli --pipe simulation (mass insertion protocol stream)
-4. redis-benchmark smoke test
+"""Socket-level RESP compatibility smoke suite.
+This script does not invoke redis-py, redis-cli, or redis-benchmark.
+The server_audit.py suite starts real isolated engine processes.
 """
 
 import argparse
@@ -145,7 +141,8 @@ def run_compatibility_suite(host, port):
     def test_mass_pipe():
         pipe_payload = bytearray()
         for i in range(1000):
-            cmd = f"*3\r\n$3\r\nSET\r\n$11\r\nmass:pipe:{i}\r\n$3\r\nval\r\n"
+            key = f"mass:pipe:{i}"
+            cmd = f"*3\r\n$3\r\nSET\r\n${len(key.encode())}\r\n{key}\r\n$3\r\nval\r\n"
             pipe_payload.extend(cmd.encode('utf-8'))
         client.sock.sendall(pipe_payload)
         # Drain 1000 OK replies

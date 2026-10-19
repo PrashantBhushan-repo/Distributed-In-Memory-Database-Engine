@@ -1,6 +1,7 @@
 #include "redisx/db/ttl.h"
 
 #include <vector>
+#include <limits>
 
 namespace redisx::db {
 
@@ -15,7 +16,7 @@ bool TTLManager::expire_if_needed(Keyspace &keyspace, std::size_t db_idx, std::s
         return false;
     }
 
-    std::uint64_t now = time_provider_->monotonic_now_ms();
+    std::uint64_t now = time_provider().wall_now_ms();
     if (now < e->expire_at_ms) {
         return false; // Not expired yet
     }
@@ -26,7 +27,9 @@ bool TTLManager::expire_if_needed(Keyspace &keyspace, std::size_t db_idx, std::s
         return true;
     }
 
+    const std::string expired_key(key);
     dict.erase(key);
+    if (on_expire_) on_expire_(db_idx, expired_key);
     stats_.expired_keys++;
     return true;
 }
@@ -48,7 +51,8 @@ bool TTLManager::set_expire_at(Keyspace &keyspace, std::size_t db_idx, std::stri
 
 bool TTLManager::set_expire_after(Keyspace &keyspace, std::size_t db_idx, std::string_view key,
                                   std::uint64_t ttl_ms) {
-    std::uint64_t now = time_provider_->monotonic_now_ms();
+    std::uint64_t now = time_provider().wall_now_ms();
+    if (ttl_ms > std::numeric_limits<std::uint64_t>::max() - now) return false;
     return set_expire_at(keyspace, db_idx, key, now + ttl_ms);
 }
 
@@ -80,7 +84,7 @@ std::int64_t TTLManager::get_ttl_ms(Keyspace &keyspace, std::size_t db_idx, std:
         return -1; // Key exists, no TTL
     }
 
-    std::uint64_t now = time_provider_->monotonic_now_ms();
+    std::uint64_t now = time_provider().wall_now_ms();
     if (now >= e->expire_at_ms) {
         return -2;
     }
@@ -93,8 +97,8 @@ std::int64_t TTLManager::get_ttl_seconds(Keyspace &keyspace, std::size_t db_idx,
     if (ttl_ms < 0) {
         return ttl_ms;
     }
-    // Round up for Redis TTL semantics (e.g. 500ms remaining -> 1s)
-    return (ttl_ms + 999) / 1000;
+    // Redis rounds TTL to the nearest second (500 ms rounds upward).
+    return ttl_ms / 1000 + (ttl_ms % 1000 >= 500 ? 1 : 0);
 }
 
 std::size_t TTLManager::active_expire_cycle(Keyspace &keyspace, std::uint32_t max_budget_ms) {
@@ -102,7 +106,7 @@ std::size_t TTLManager::active_expire_cycle(Keyspace &keyspace, std::uint32_t ma
         return 0; // Replicas do not run active expiration
     }
 
-    std::uint64_t start_time = time_provider_->monotonic_now_ms();
+    std::uint64_t start_time = time_provider().monotonic_now_ms();
     std::size_t total_expired = 0;
 
     for (std::size_t db_idx = 0; db_idx < Keyspace::NUM_DATABASES; ++db_idx) {
@@ -111,7 +115,7 @@ std::size_t TTLManager::active_expire_cycle(Keyspace &keyspace, std::uint32_t ma
             continue;
         }
 
-        std::uint64_t cursor = 0;
+        auto &cursor = cursors_[db_idx];
         std::size_t iterations = 0;
         constexpr std::size_t MAX_ITERATIONS_PER_DB = 16;
 
@@ -134,21 +138,18 @@ std::size_t TTLManager::active_expire_cycle(Keyspace &keyspace, std::uint32_t ma
                 break; // No keys with expiration found in this pass
             }
 
-            std::uint64_t now = time_provider_->monotonic_now_ms();
+            std::uint64_t now = time_provider().wall_now_ms();
             std::size_t expired_in_sample = 0;
 
             for (const auto &key : sampled_keys) {
                 Entry *e = dict.find(key);
                 if (e != nullptr && e->expire_at_ms > 0 && now >= e->expire_at_ms) {
-                    dict.erase(key);
-                    expired_in_sample++;
-                    total_expired++;
-                    stats_.expired_keys++;
+                    if (expire_if_needed(keyspace, db_idx, key)) { expired_in_sample++; total_expired++; }
                 }
             }
 
             // Check hard time budget limit (1ms default)
-            std::uint64_t elapsed = time_provider_->monotonic_now_ms() - start_time;
+            std::uint64_t elapsed = time_provider().monotonic_now_ms() - start_time;
             if (elapsed >= max_budget_ms) {
                 return total_expired; // Hard budget reached, stop cycle
             }

@@ -1,7 +1,20 @@
 #include "redisx/commands/zset_cmds.h"
 #include "redisx/proto/resp_writer.h"
+#include "redisx/commands/numeric.h"
+
+#include <charconv>
+#include <cmath>
+#include <limits>
+#include <algorithm>
 
 namespace redisx::commands {
+static std::string score_text(double score) {
+    char buffer[64];
+    const auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), score, std::chars_format::general, std::numeric_limits<double>::max_digits10);
+    if (error != std::errc{}) throw std::out_of_range("score");
+    return std::string(buffer, end);
+}
+
 
 static bool check_type(db::Keyspace &ks, std::size_t db_idx, const std::string &key, types::ObjectType expected_type, core::Buffer &out) {
     auto *entry = ks.db_get(db_idx, key);
@@ -17,6 +30,18 @@ static void handle_zadd(const proto::Command &cmd, db::Keyspace &ks, std::size_t
         proto::RespWriter::write_error(out, "ERR wrong number of arguments for 'zadd' command");
         return;
     }
+    std::vector<double> scores;
+    for (std::size_t i = 2; i < cmd.arg_count(); i += 2) {
+        std::string_view text = cmd.arg(i);
+        if (!text.empty() && text.front() == '+') text.remove_prefix(1);
+        double score = 0;
+        auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), score);
+        if (text.empty() || error != std::errc{} || end != text.data() + text.size() || std::isnan(score)) {
+            proto::RespWriter::write_error(out, "ERR value is not a valid float");
+            return;
+        }
+        scores.push_back(score);
+    }
     const std::string &key = cmd.arg(1);
     if (!check_type(ks, db_idx, key, types::ObjectType::ZSet, out)) return;
 
@@ -26,7 +51,7 @@ static void handle_zadd(const proto::Command &cmd, db::Keyspace &ks, std::size_t
     if (!entry) {
         types::Object obj = types::Object::create_zset();
         for (size_t i = 2; i < cmd.arg_count(); i += 2) {
-            double score = std::stod(cmd.arg(i));
+            double score = scores[(i - 2) / 2];
             if (obj.zset_add(score, cmd.arg(i + 1))) {
                 added++;
             }
@@ -35,7 +60,7 @@ static void handle_zadd(const proto::Command &cmd, db::Keyspace &ks, std::size_t
     } else {
         auto &obj = entry->value.object();
         for (size_t i = 2; i < cmd.arg_count(); i += 2) {
-            double score = std::stod(cmd.arg(i));
+            double score = scores[(i - 2) / 2];
             if (obj.zset_add(score, cmd.arg(i + 1))) {
                 added++;
             }
@@ -57,11 +82,7 @@ static void handle_zscore(const proto::Command &cmd, db::Keyspace &ks, std::size
 
     auto sc = entry->value.object().zset_score(member);
     if (sc) {
-        std::string sc_str = std::to_string(*sc);
-        if (sc_str.find('.') != std::string::npos) {
-            sc_str.erase(sc_str.find_last_not_of('0') + 1, std::string::npos);
-            if (sc_str.back() == '.') sc_str.pop_back();
-        }
+        std::string sc_str = score_text(*sc);
         proto::RespWriter::write_bulk_string(out, sc_str);
     } else {
         proto::RespWriter::write_null_bulk(out);
@@ -72,16 +93,17 @@ static void handle_zrange(const proto::Command &cmd, db::Keyspace &ks, std::size
     const std::string &key = cmd.arg(1);
     if (!check_type(ks, db_idx, key, types::ObjectType::ZSet, out)) return;
 
-    size_t start = static_cast<size_t>(std::stoll(cmd.arg(2)));
-    size_t stop = static_cast<size_t>(std::stoll(cmd.arg(3)));
+    auto start = parse_integer(cmd.arg(2));
+    auto stop = parse_integer(cmd.arg(3));
 
     bool withscores = false;
+    if (cmd.arg_count() > 5) { proto::RespWriter::write_error(out, "ERR syntax error"); return; }
     if (cmd.arg_count() > 4) {
         std::string opt = cmd.arg(4);
         for (auto &c : opt) c = static_cast<char>(toupper(c));
         if (opt == "WITHSCORES") {
             withscores = true;
-        }
+        } else { proto::RespWriter::write_error(out, "ERR syntax error"); return; }
     }
 
     auto *entry = ks.db_get(db_idx, key);
@@ -90,7 +112,12 @@ static void handle_zrange(const proto::Command &cmd, db::Keyspace &ks, std::size
         return;
     }
 
-    auto range = entry->value.object().zset_range(start, stop);
+    const auto length = static_cast<std::int64_t>(entry->value.object().zset_len());
+    if (start < 0) start += length;
+    if (stop < 0) stop += length;
+    start = std::max<std::int64_t>(0, start);
+    if (stop < 0 || start >= length || start > stop) { proto::RespWriter::write_array_header(out, 0); return; }
+    auto range = entry->value.object().zset_range(static_cast<size_t>(start), static_cast<size_t>(stop));
     if (!withscores) {
         proto::RespWriter::write_array_header(out, range.size());
         for (const auto &[m, s] : range) {
@@ -100,11 +127,7 @@ static void handle_zrange(const proto::Command &cmd, db::Keyspace &ks, std::size
         proto::RespWriter::write_array_header(out, range.size() * 2);
         for (const auto &[m, s] : range) {
             proto::RespWriter::write_bulk_string(out, m);
-            std::string sc_str = std::to_string(s);
-            if (sc_str.find('.') != std::string::npos) {
-                sc_str.erase(sc_str.find_last_not_of('0') + 1, std::string::npos);
-                if (sc_str.back() == '.') sc_str.pop_back();
-            }
+            std::string sc_str = score_text(s);
             proto::RespWriter::write_bulk_string(out, sc_str);
         }
     }
@@ -166,7 +189,7 @@ static void handle_zcard(const proto::Command &cmd, db::Keyspace &ks, std::size_
 }
 
 void register_zset_commands(Dispatcher &dispatcher) {
-    dispatcher.register_command({"ZADD", -4, CMD_FLAG_WRITE, handle_zadd});
+    dispatcher.register_command({"ZADD", -4, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, handle_zadd});
     dispatcher.register_command({"ZSCORE", 3, CMD_FLAG_READONLY, handle_zscore});
     dispatcher.register_command({"ZRANGE", -4, CMD_FLAG_READONLY, handle_zrange});
     dispatcher.register_command({"ZRANK", 3, CMD_FLAG_READONLY, handle_zrank});

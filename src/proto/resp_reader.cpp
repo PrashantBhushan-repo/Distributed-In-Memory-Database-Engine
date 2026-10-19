@@ -2,6 +2,7 @@
 #include "redisx/proto/inline_commands.h"
 #include "redisx/proto/limits.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cstring>
 #include <limits>
@@ -48,18 +49,12 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
         std::optional<std::size_t> newline_pos;
         std::size_t delim_len = 2;
 
-        auto crlf_opt = find_crlf(data, available);
-        if (crlf_opt.has_value()) {
-            newline_pos = crlf_opt.value();
-            delim_len = 2;
-        } else {
-            // Check for lone '\n'
-            for (std::size_t i = 0; i < available; ++i) {
-                if (data[i] == '\n') {
-                    newline_pos = i;
-                    delim_len = 1;
-                    break;
-                }
+        // Stop at the first newline, including when later pipelined lines use CRLF.
+        for (std::size_t i = 0; i < available; ++i) {
+            if (data[i] == '\n') {
+                newline_pos = (i > 0 && data[i - 1] == '\r') ? i - 1 : i;
+                delim_len = (i > 0 && data[i - 1] == '\r') ? 2 : 1;
+                break;
             }
         }
 
@@ -71,6 +66,7 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
         }
 
         std::size_t line_end = newline_pos.value();
+        if (line_end > MAX_INLINE_LINE_SIZE) return core::ErrorCode::ProtocolError;
         std::string_view line(data, line_end);
 
         auto cmd_res = parse_inline_command(line);
@@ -92,6 +88,7 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
     }
 
     std::size_t count_header_end = crlf_opt.value();
+    if (count_header_end > 64) return core::ErrorCode::ProtocolError;
     std::string_view count_str(data + 1, count_header_end - 1);
 
     std::int64_t count = 0;
@@ -99,7 +96,7 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
         return core::ErrorCode::ProtocolError;
     }
 
-    if (count < -1) {
+    if (count < 0) {
         return core::ErrorCode::ProtocolError;
     }
 
@@ -107,7 +104,7 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
         return core::ErrorCode::ProtocolError;
     }
 
-    if (count == -1 || count == 0) {
+    if (count == 0) {
         // Null array or 0-element array
         in_buf.consume(count_header_end + 2);
         return std::optional<Command>(Command(std::vector<std::string>{}));
@@ -115,7 +112,8 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
 
     std::size_t cursor = count_header_end + 2;
     std::vector<std::string> args;
-    args.reserve(static_cast<std::size_t>(count));
+    // Do not allocate a million argument slots from an incomplete header.
+    args.reserve(std::min(static_cast<std::size_t>(count), std::size_t{16}));
 
     for (std::int64_t i = 0; i < count; ++i) {
         if (cursor >= available) {
@@ -134,6 +132,7 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
             }
 
             std::size_t len_header_end = len_crlf.value();
+            if (len_header_end - cursor > 64) return core::ErrorCode::ProtocolError;
             std::string_view len_str(data + cursor + 1, len_header_end - (cursor + 1));
 
             std::int64_t bulk_len = 0;
@@ -141,19 +140,12 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
                 return core::ErrorCode::ProtocolError;
             }
 
-            if (bulk_len < -1) {
+            if (bulk_len < 0) {
                 return core::ErrorCode::ProtocolError;
             }
 
             if (bulk_len > static_cast<std::int64_t>(MAX_BULK_SIZE)) {
                 return core::ErrorCode::ProtocolError;
-            }
-
-            if (bulk_len == -1) {
-                // Null bulk string
-                args.push_back("");
-                cursor = len_header_end + 2;
-                continue;
             }
 
             std::size_t payload_start = len_header_end + 2;
@@ -171,19 +163,6 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
 
             args.emplace_back(data + payload_start, static_cast<std::size_t>(bulk_len));
             cursor = total_elem_needed;
-        } else if (elem_type == '+' || elem_type == ':' || elem_type == '-') {
-            // Simple string, integer, or error element in array
-            auto elem_crlf = find_crlf(data, available, cursor);
-            if (!elem_crlf.has_value()) {
-                if (available - cursor > MAX_INLINE_LINE_SIZE) {
-                    return core::ErrorCode::ProtocolError;
-                }
-                return std::optional<Command>(std::nullopt);
-            }
-
-            std::size_t elem_end = elem_crlf.value();
-            args.emplace_back(data + cursor + 1, elem_end - (cursor + 1));
-            cursor = elem_end + 2;
         } else {
             // Invalid element type in RESP multibulk
             return core::ErrorCode::ProtocolError;
@@ -193,6 +172,48 @@ core::Result<std::optional<Command>> RespReader::parse(core::Buffer &in_buf) {
     // Successfully parsed all elements
     in_buf.consume(cursor);
     return std::optional<Command>(Command(std::move(args)));
+}
+
+core::Result<std::optional<Command>> StreamingRespReader::parse(core::Buffer &input) {
+    while (true) {
+        auto view = input.peek_string_view();
+        if (!remaining_) {
+            if (view.empty()) return std::optional<Command>{};
+            if (view.front() != '*') return RespReader::parse(input);
+            const auto end = view.find("\r\n");
+            if (end == std::string_view::npos) {
+                if (view.size() > 64) return core::ErrorCode::ProtocolError;
+                return std::optional<Command>{};
+            }
+            std::int64_t count = 0;
+            if (end > 64 || !parse_int64(view.substr(1, end - 1), count) || count < 0 || count > static_cast<std::int64_t>(MAX_MULTIBULK_ARGS)) return core::ErrorCode::ProtocolError;
+            remaining_ = static_cast<std::size_t>(count); args_.clear();
+            input.consume(end + 2);
+        }
+        if (*remaining_ == 0) {
+            remaining_.reset(); bulk_length_.reset();
+            return std::optional<Command>(Command(std::move(args_)));
+        }
+        view = input.peek_string_view();
+        if (!bulk_length_) {
+            if (view.empty()) return std::optional<Command>{};
+            if (view.front() != '$') return core::ErrorCode::ProtocolError;
+            const auto end = view.find("\r\n");
+            if (end == std::string_view::npos) {
+                if (view.size() > 64) return core::ErrorCode::ProtocolError;
+                return std::optional<Command>{};
+            }
+            std::int64_t length = 0;
+            if (end > 64 || !parse_int64(view.substr(1, end - 1), length) || length < 0 || length > static_cast<std::int64_t>(MAX_BULK_SIZE)) return core::ErrorCode::ProtocolError;
+            bulk_length_ = static_cast<std::size_t>(length); input.consume(end + 2);
+        }
+        view = input.peek_string_view();
+        const auto length = *bulk_length_;
+        if (view.size() < length + 2) return std::optional<Command>{};
+        if (view[length] != '\r' || view[length + 1] != '\n') return core::ErrorCode::ProtocolError;
+        args_.emplace_back(view.substr(0, length)); input.consume(length + 2);
+        --*remaining_; bulk_length_.reset();
+    }
 }
 
 } // namespace redisx::proto
