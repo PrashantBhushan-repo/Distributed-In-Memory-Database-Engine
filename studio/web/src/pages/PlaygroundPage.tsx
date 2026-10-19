@@ -318,6 +318,7 @@ export const PlaygroundPage: React.FC = () => {
               {inspection.structure?.type === 'hash' && (
                 <HashVisualizer structure={inspection.structure as HashStructure} reducedMotion={reducedMotion} />
               )}
+              {!inspection.encodingAvailable && <div className="rounded-lg border border-slate-800 bg-slate-900 p-4 space-y-3"><p className="text-xs text-slate-400">Live values from sandbox database 15. Internal allocation and encoding details are not exposed by this engine.</p><pre className="text-xs overflow-auto max-h-96 whitespace-pre-wrap">{typeof inspection.valuePreview === 'string' ? inspection.valuePreview : JSON.stringify(inspection.valuePreview, null, 2)}</pre><p className="text-[10px] text-slate-500">Collection previews show at most the first 100 entries.</p></div>}
               {inspection.structure?.type === 'set' && (
                 <SetVisualizer structure={inspection.structure as SetStructure} reducedMotion={reducedMotion} />
               )}

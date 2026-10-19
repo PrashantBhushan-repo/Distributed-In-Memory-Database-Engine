@@ -26,14 +26,19 @@ export const KeyDetailPanel: React.FC<KeyDetailPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [page, setPage] = useState(1);
+  const [cursors, setCursors] = useState<number[]>([0]);
+  const requestVersion = React.useRef(0);
   const [toastMessage, setToastMessage] = useState<{ text: string; command?: string } | null>(null);
 
-  const fetchKeyDetail = useCallback(async (name: string) => {
+  const fetchKeyDetail = useCallback(async (name: string, requestedPage = 1, cursor = 0) => {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError(null);
     setNotFound(false);
     try {
-      const res = await fetch(`/api/key/${encodeURIComponent(name)}`);
+      const res = await fetch(`/api/key/${encodeURIComponent(name)}?page=${requestedPage}&cursor=${cursor}&limit=50`);
+      if (version !== requestVersion.current) return;
       if (res.status === 404) {
         setNotFound(true);
         setDetail(null);
@@ -43,15 +48,20 @@ export const KeyDetailPanel: React.FC<KeyDetailPanelProps> = ({
         throw new Error(`Failed to load key '${name}'`);
       }
       const data = await res.json();
+      if (version !== requestVersion.current) return;
       setDetail(data);
+      setPage(requestedPage);
+      const next = data.hashPage?.nextCursor ?? data.setPage?.nextCursor;
+      if (next !== undefined) setCursors(previous => { const result = [...previous]; result[requestedPage] = next; return result; });
     } catch (err: any) {
-      setError(err.message || 'Error loading key details');
+      if (version === requestVersion.current) setError(err.message || 'Error loading key details');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    setPage(1); setCursors([0]);
     if (keyName) {
       fetchKeyDetail(keyName);
     } else {
@@ -59,6 +69,7 @@ export const KeyDetailPanel: React.FC<KeyDetailPanelProps> = ({
       setNotFound(false);
       setError(null);
     }
+    return () => { requestVersion.current++; };
   }, [keyName, fetchKeyDetail]);
 
   const showToast = (text: string, command?: string) => {
@@ -198,6 +209,7 @@ export const KeyDetailPanel: React.FC<KeyDetailPanelProps> = ({
       />
 
       {/* Type-Specific Body */}
+      {detail.type !== 'string' && <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 text-xs text-slate-400"><span>Page {page} · {detail.length.toLocaleString()} total entries</span><div className="flex gap-2"><button className="studio-secondary" disabled={page <= 1} onClick={() => fetchKeyDetail(keyName, page - 1, cursors[page - 2] ?? 0)}>Previous</button><button className="studio-secondary" disabled={!(detail.listPage ?? detail.hashPage ?? detail.setPage ?? detail.zsetPage)?.hasMore} onClick={() => fetchKeyDetail(keyName, page + 1, cursors[page] ?? 0)}>Next</button></div></div>}
       {detail.type === 'string' && (
         <StringEditor detail={detail} isViewer={isViewer} onSave={handleStringSaved} />
       )}

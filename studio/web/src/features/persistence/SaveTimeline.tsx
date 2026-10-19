@@ -30,6 +30,7 @@ function formatBytes(bytes: number): string {
 }
 
 function timeAgo(epochSec: number): string {
+  if (!epochSec) return 'Not reported';
   const diffSec = Math.max(0, Math.floor(Date.now() / 1000) - epochSec);
   if (diffSec < 60) return `${diffSec}s ago`;
   const diffMin = Math.floor(diffSec / 60);

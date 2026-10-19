@@ -1,8 +1,7 @@
 import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { OnboardingTour } from './components/OnboardingTour';
-import { MetricsProvider } from './features/metrics/MetricsContext';
+import { LandingPage } from './features/landing/LandingPage';
+const StudioShell = React.lazy(() => import('./StudioShell'));
 
 // Route-level code-splitting with React.lazy
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
@@ -31,15 +30,15 @@ const PageLoader: React.FC = () => (
   </div>
 );
 
-export default function App() {
+export function AppRoutes() {
   return (
-    <BrowserRouter>
-      <MetricsProvider>
-        <Layout>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              {/* Default redirect to Dashboard */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+<Suspense fallback={<PageLoader />}>
+      <Routes>
+              {/* Public pages are separate from the Studio shell. */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/compare/redis" element={<LandingPage compare />} />
+              <Route element={<StudioShell />}>
 
               {/* 1. Dashboard (Interactive Live Stream & Health Status) */}
               <Route path="/dashboard" element={<DashboardPage />} />
@@ -94,13 +93,13 @@ export default function App() {
 
               {/* Catch-all */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </Suspense>
-        </Layout>
-      </MetricsProvider>
+              </Route>
+      </Routes>
+    </Suspense>
 
-      {/* 5-Step First-Run Onboarding Tour Overlay */}
-      <OnboardingTour />
-    </BrowserRouter>
-  );
+);
+}
+
+export default function App() {
+  return <BrowserRouter><AppRoutes /></BrowserRouter>;
 }

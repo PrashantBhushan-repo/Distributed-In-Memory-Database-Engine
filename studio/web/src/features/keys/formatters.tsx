@@ -17,7 +17,7 @@ export function middleEllipsis(str: string, maxLength = 34): string {
 }
 
 export function formatTtl(ttlSeconds: number): { text: string; isExpiringSoon: boolean; isPersist: boolean } {
-  if (ttlSeconds <= -1) {
+  if (ttlSeconds === -1) {
     return { text: 'persist', isExpiringSoon: false, isPersist: true };
   }
   if (ttlSeconds <= -2 || ttlSeconds === 0) {

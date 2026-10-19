@@ -1,7 +1,7 @@
 import React from 'react';
 import { Server, Database, Activity, ShieldCheck, AlertCircle } from 'lucide-react';
 import { ReplicationTopology } from './types';
-import { getDisplayHostname } from '../../utils/host';
+import { useEngineAddress } from '../../utils/useEngineAddress';
 
 interface TopologyGraphProps {
   topology: ReplicationTopology;
@@ -9,6 +9,7 @@ interface TopologyGraphProps {
 }
 
 export const TopologyGraph: React.FC<TopologyGraphProps> = ({ topology, onSelectReplica }) => {
+  const engineAddress = useEngineAddress();
   const isMaster = topology.role === 'master';
   const replicas = topology.replicas || [];
 
@@ -102,7 +103,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({ topology, onSelect
                   UPSTREAM MASTER
                 </text>
                 <text x="90" y="44" fill="#94a3b8" fontSize="10" fontFamily="monospace" textAnchor="middle">
-                  {topology.masterHost || getDisplayHostname()}:{topology.masterPort || 6379}
+                  {topology.masterHost ? `${topology.masterHost}:${topology.masterPort ?? 'unknown'}` : engineAddress}
                 </text>
               </g>
             </g>

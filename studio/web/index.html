@@ -2,14 +2,25 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ef4444'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RedisX Studio — In-Memory Database Explorer & Learning Lab</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>pbredisdb — See inside your database</title>
+    <meta name="description" content="Explore a Redis-compatible C++20 database with RedisX Studio. Inspect keys, follow commands, and learn how memory, expiration, persistence, and replication work." />
+    <meta name="keywords" content="pbredisdb, RedisX Studio, Redis, C++, in-memory database, database learning" />
+    <meta name="theme-color" content="#101112" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="pbredisdb — See inside your database" />
+    <meta property="og:description" content="An in-memory engine. An open window into how it works. Explore RedisX Studio." />
+    <meta property="og:image" content="/social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="pbredisdb — See inside your database" />
+    <meta name="twitter:description" content="Explore the database that opens up the black box." />
+    <meta name="twitter:image" content="/social-card.png" />
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"pbredisdb / RedisX Studio","applicationCategory":"DeveloperApplication","operatingSystem":"Linux / WSL; browser-based Studio","description":"An educational Redis-compatible in-memory database and visual learning studio.","codeRepository":"https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine"}</script>
   </head>
-  <body class="bg-[#090d16] text-slate-100 antialiased font-['Plus_Jakarta_Sans',sans-serif]">
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

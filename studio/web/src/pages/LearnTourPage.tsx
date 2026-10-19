@@ -48,19 +48,21 @@ export const LearnTourPage: React.FC = () => {
   const timerRef = useRef<any>(null);
 
   // Live Server Metrics
-  const { latestSample } = useMetrics();
+  const { latestSample, hasSample } = useMetrics();
+  const [engineInfo, setEngineInfo] = useState<Record<string, unknown>>({});
+  useEffect(() => {
+    const abort = new AbortController();
+    const load = () => fetch('/api/info', { signal: abort.signal }).then(response => response.ok ? response.json() : null).then(info => {
+      if (info && !abort.signal.aborted) setEngineInfo({ ...info.server, ...info.clients, ...info.memory, ...info.stats, ...info.replication, ...info.persistence,
+        db0_keys: info.keyspace?.db0?.keys ?? 0 });
+    }).catch(() => {});
+    void load(); const timer = setInterval(load, 5000);
+    return () => { abort.abort(); clearInterval(timer); };
+  }, []);
   const sample = latestSample || {};
   const metrics: Record<string, any> = {
-    connected_clients: sample.connectedClients ?? 1,
-    instantaneous_ops_per_sec: sample.opsPerSec ?? 0,
-    total_commands_processed: sample.totalKeys ? sample.totalKeys * 10 : 124,
-    db0_keys: sample.totalKeys ?? 8,
-    expired_keys: Math.round(sample.expiredKeysPerSec ?? 0),
-    used_memory_human: sample.usedMemoryHuman ?? '1.24 MB',
-    mem_fragmentation_ratio: '1.08',
-    aof_enabled: 'no',
-    master_repl_offset: 4082,
-    ...(sample as any),
+    ...engineInfo,
+    ...(hasSample ? { connected_clients: sample.connectedClients, instantaneous_ops_per_sec: sample.opsPerSec, used_memory_human: sample.usedMemoryHuman } : {}),
   };
 
   const activeTrace: RequestAnimationStep[] =
@@ -339,7 +341,7 @@ export const LearnTourPage: React.FC = () => {
                       ? field.formatter
                         ? field.formatter(rawVal)
                         : String(rawVal)
-                      : field.fallback || 'N/A';
+                      : 'Not reported';
 
                   return (
                     <div

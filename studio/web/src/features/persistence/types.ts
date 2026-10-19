@@ -13,7 +13,7 @@ export interface PersistenceInfo {
   loading: boolean;
   rdbLastSaveTime: number;
   rdbLastSaveTimeIso: string;
-  rdbLastBgsaveStatus: 'ok' | 'err';
+  rdbLastBgsaveStatus: 'ok' | 'err' | 'unknown';
   rdbLastBgsaveTimeSec: number;
   rdbCurrentBgsaveTimeSec: number;
   rdbBgsaveInProgress: boolean;
@@ -25,7 +25,7 @@ export interface PersistenceInfo {
   aofRewriteScheduled: boolean;
   aofLastRewriteTimeSec: number;
   aofCurrentRewriteTimeSec: number;
-  aofLastBgrewriteStatus: 'ok' | 'err';
+  aofLastBgrewriteStatus: 'ok' | 'err' | 'unknown';
   aofCurrentSize: number;
   aofBaseSize: number;
   aofBufferDelay: number;

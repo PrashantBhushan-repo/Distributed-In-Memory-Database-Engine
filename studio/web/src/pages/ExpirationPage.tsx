@@ -18,9 +18,10 @@ import { TtlHistogramChart } from '../features/expiration/TtlHistogramChart';
 import { ExpiredVsEvictedChart } from '../features/expiration/ExpiredVsEvictedChart';
 import { ActiveExpireStatsCard } from '../features/expiration/ActiveExpireStatsCard';
 import { BulkSetTtlModal } from '../features/expiration/BulkSetTtlModal';
-import { getDisplayHost } from '../utils/host';
+import { useEngineAddress } from '../utils/useEngineAddress';
 
 export const ExpirationPage: React.FC = () => {
+  const engineAddress = useEngineAddress();
   const [keys, setKeys] = useState<ExpiringKey[]>([]);
   const [totalWithTtl, setTotalWithTtl] = useState(0);
   const [totalSampled, setTotalSampled] = useState(0);
@@ -88,7 +89,7 @@ export const ExpirationPage: React.FC = () => {
                 Key Expiration &amp; TTL Lifecycle
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                {getDisplayHost()}[db0]
+                {engineAddress}[db{localStorage.getItem('redisx_db') ?? '0'}]
               </span>
             </div>
             <p className="text-xs text-slate-400">

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Terminal, Send, Trash2, RotateCcw, AlertCircle, CornerDownLeft } from 'lucide-react';
-import { getDisplayHost } from '../../utils/host';
+import { useEngineAddress } from '../../utils/useEngineAddress';
 
 interface ConsoleEntry {
   command: string;
@@ -25,6 +25,7 @@ export const PlaygroundConsole: React.FC<PlaygroundConsoleProps> = ({
   onClearConsole,
   executing,
 }) => {
+  const engineAddress = useEngineAddress();
   const [inputVal, setInputVal] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -109,7 +110,7 @@ export const PlaygroundConsole: React.FC<PlaygroundConsoleProps> = ({
               {/* Command line */}
               <div className="flex items-center justify-between text-slate-400">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-red-500 font-bold">{getDisplayHost()}[15]&gt;</span>
+                  <span className="text-red-500 font-bold">{engineAddress}[15]&gt;</span>
                   <span className="text-slate-100 font-bold">{entry.command}</span>
                 </div>
                 {entry.durationMs !== undefined && (

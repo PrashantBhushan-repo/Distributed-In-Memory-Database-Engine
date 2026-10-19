@@ -1,6 +1,7 @@
 export type KeyType = 'string' | 'hash' | 'list' | 'set' | 'zset' | 'stream' | 'unknown';
 
 export interface KeyItem {
+  observedAt?: number;
   name: string;
   type: KeyType;
   ttl: number; // in seconds (-1 = persist, -2 = expired)
@@ -41,9 +42,9 @@ export interface KeyDetail {
   listItems?: Array<{ index: number; value: string }>;
   listPage?: { page: number; limit: number; total: number; hasMore: boolean };
   hashEntries?: Array<{ field: string; value: string }>;
-  hashPage?: { page: number; limit: number; total: number; hasMore: boolean };
+  hashPage?: { page: number; limit: number; total: number; hasMore: boolean; nextCursor?: number };
   setMembers?: string[];
-  setPage?: { page: number; limit: number; total: number; hasMore: boolean };
+  setPage?: { page: number; limit: number; total: number; hasMore: boolean; nextCursor?: number };
   zsetMembers?: Array<{ rank: number; member: string; score: number }>;
   zsetPage?: { page: number; limit: number; total: number; hasMore: boolean };
 }

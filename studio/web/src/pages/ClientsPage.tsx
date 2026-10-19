@@ -5,9 +5,10 @@ import { ClientSummaryStrip } from '../features/clients/ClientSummaryStrip';
 import { ClientsTable } from '../features/clients/ClientsTable';
 import { KillClientModal } from '../features/clients/KillClientModal';
 import { RenameClientModal } from '../features/clients/RenameClientModal';
-import { getDisplayHost } from '../utils/host';
+import { useEngineAddress } from '../utils/useEngineAddress';
 
 export const ClientsPage: React.FC = () => {
+  const engineAddress = useEngineAddress();
   const [clients, setClients] = useState<ClientInfo[]>([]);
   const [summary, setSummary] = useState<ClientsSummary>({
     total: 0,
@@ -105,7 +106,7 @@ export const ClientsPage: React.FC = () => {
                 Client Connections Manager
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                {getDisplayHost()}
+                {engineAddress}
               </span>
             </div>
             <p className="text-xs text-slate-400">
