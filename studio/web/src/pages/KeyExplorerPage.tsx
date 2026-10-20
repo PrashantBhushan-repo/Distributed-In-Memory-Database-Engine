@@ -46,12 +46,19 @@ export const KeyExplorerPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isScanningActive, setIsScanningActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scanRequest = useRef<AbortController | null>(null);
+  const treeRequest = useRef<AbortController | null>(null);
 
   // Bulk Selection & Modals state
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [createWizardOpen, setCreateWizardOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [isViewer, setIsViewer] = useState(false);
+  const [isViewer] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('redisx_user') ?? '{}').role !== 'admin' && JSON.parse(localStorage.getItem('redisx_user') ?? '{}').role !== 'operator'; } catch { return true; }
+  });
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  const remainingTtl = (key: KeyItem) => key.ttlMs < 0 ? key.ttlMs : Math.max(0, Math.ceil((key.ttlMs - (clock - (key.observedAt ?? clock))) / 1000));
 
   // Tree state
   const [treeNodes, setTreeNodes] = useState<KeyTreeNode[]>([]);
@@ -86,99 +93,85 @@ export const KeyExplorerPage: React.FC = () => {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  // Initial fetch and on filter/query reset
+  // Cancel old filters/scans before accepting results for a new query.
   const fetchKeysInitial = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    scanRequest.current?.abort();
+    const controller = new AbortController();
+    scanRequest.current = controller;
+    setLoading(true); setError(null); setIsScanningActive(false);
     try {
       const match = debouncedQuery ? (debouncedQuery.includes('*') ? debouncedQuery : `*${debouncedQuery}*`) : '*';
       const typeParam = typeFilter !== 'all' ? `&type=${typeFilter}` : '';
-      const res = await fetch(`/api/keys?cursor=0&match=${encodeURIComponent(match)}&count=100${typeParam}`);
-      if (!res.ok) throw new Error('Failed to scan keys from gateway');
+      const res = await fetch(`/api/keys?cursor=0&match=${encodeURIComponent(match)}&count=100${typeParam}`, { signal: controller.signal });
+      if (!res.ok) throw new Error('Could not scan keys. Check the engine connection and retry.');
       const data = await res.json();
-      setKeys(data.keys || []);
-      setCursor(data.cursor || 0);
-      setTotalApprox(data.totalApprox || (data.keys ? data.keys.length : 0));
-    } catch (err: any) {
-      setError(err.message || 'Error scanning keys');
+      if (controller.signal.aborted) return;
+      setKeys((data.keys || []).map((key: KeyItem) => ({ ...key, observedAt: Date.now() })));
+      setCursor(data.cursor || 0); setTotalApprox(data.totalApprox ?? 0);
+      if (data.cursor && !data.keys?.length) setIsScanningActive(true);
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Could not scan keys.');
     } finally {
-      setLoading(false);
+      if (scanRequest.current === controller) { scanRequest.current = null; setLoading(false); }
     }
   }, [debouncedQuery, typeFilter]);
 
-  // Fetch Tree view data
   const fetchTreeData = useCallback(async () => {
-    setTreeLoading(true);
+    treeRequest.current?.abort();
+    const controller = new AbortController();
+    treeRequest.current = controller;
+    setTreeLoading(true); setError(null);
     try {
       const prefix = debouncedQuery ? debouncedQuery.replace(/\*$/, '') : '';
-      const res = await fetch(`/api/keys/tree?prefix=${encodeURIComponent(prefix)}&delimiter=:`);
-      if (res.ok) {
-        const data = await res.json();
-        setTreeNodes(data.nodes || []);
-      }
-    } catch {
-      // ignore
+      const res = await fetch(`/api/keys/tree?prefix=${encodeURIComponent(prefix)}&delimiter=:`, { signal: controller.signal });
+      if (!res.ok) throw new Error('Could not load the key tree. Check the engine connection and retry.');
+      const data = await res.json();
+      if (!controller.signal.aborted) setTreeNodes(data.nodes || []);
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Could not load the key tree.');
     } finally {
-      setTreeLoading(false);
+      if (treeRequest.current === controller) { treeRequest.current = null; setTreeLoading(false); }
     }
   }, [debouncedQuery]);
 
   useEffect(() => {
-    if (viewMode === 'list') {
-      fetchKeysInitial();
-    } else {
-      fetchTreeData();
-    }
+    if (viewMode === 'list') void fetchKeysInitial();
+    else { setIsScanningActive(false); void fetchTreeData(); }
+    return () => { scanRequest.current?.abort(); treeRequest.current?.abort(); };
   }, [fetchKeysInitial, fetchTreeData, viewMode]);
 
-  // Incremental next SCAN fetch (infinite scroll)
   const fetchNextScan = useCallback(async () => {
-    if (cursor === 0 || loading) return;
+    if (cursor === 0 || scanRequest.current) return;
+    const controller = new AbortController();
+    scanRequest.current = controller;
     setLoading(true);
     try {
       const match = debouncedQuery ? (debouncedQuery.includes('*') ? debouncedQuery : `*${debouncedQuery}*`) : '*';
       const typeParam = typeFilter !== 'all' ? `&type=${typeFilter}` : '';
-      const res = await fetch(`/api/keys?cursor=${cursor}&match=${encodeURIComponent(match)}&count=100${typeParam}`);
-      if (res.ok) {
-        const data = await res.json();
-        setKeys((prev) => {
-          const existingNames = new Set(prev.map((k) => k.name));
-          const newKeys = (data.keys || []).filter((k: KeyItem) => !existingNames.has(k.name));
-          return [...prev, ...newKeys];
-        });
-        setCursor(data.cursor || 0);
-        if (data.totalApprox) setTotalApprox(data.totalApprox);
-      }
-    } catch {
-      // Keep existing keys
+      const res = await fetch(`/api/keys?cursor=${cursor}&match=${encodeURIComponent(match)}&count=100${typeParam}`, { signal: controller.signal });
+      if (!res.ok) throw new Error('The scan stopped because the engine request failed. Retry or refresh the list.');
+      const data = await res.json();
+      if (controller.signal.aborted) return;
+      setKeys(previous => {
+        const names = new Set(previous.map(key => key.name));
+        const newKeys = (data.keys || []).filter((key: KeyItem) => !names.has(key.name));
+        return [...previous, ...newKeys.map((key: KeyItem) => ({ ...key, observedAt: Date.now() }))];
+      });
+      setCursor(data.cursor || 0); setTotalApprox(data.totalApprox ?? 0);
+    } catch (failure) {
+      if (!controller.signal.aborted) { setError(failure instanceof Error ? failure.message : 'The key scan failed.'); setIsScanningActive(false); }
     } finally {
-      setLoading(false);
+      if (scanRequest.current === controller) { scanRequest.current = null; setLoading(false); }
     }
-  }, [cursor, loading, debouncedQuery, typeFilter]);
+  }, [cursor, debouncedQuery, typeFilter]);
 
-  // Background auto-scan loop until cursor hits 0 or stopped
+  // Exactly one scheduled next page. Changes and Stop cancel that timer.
   useEffect(() => {
-    let cancel = false;
-    const runAutoScan = async () => {
-      if (!isScanningActive || cursor === 0) {
-        setIsScanningActive(false);
-        return;
-      }
-      await fetchNextScan();
-      if (!cancel && isScanningActive && cursor !== 0) {
-        setTimeout(runAutoScan, 200);
-      }
-    };
-
-    if (isScanningActive) {
-      runAutoScan();
-    }
-
-    return () => {
-      cancel = true;
-    };
-  }, [isScanningActive, cursor, fetchNextScan]);
-
+    if (!isScanningActive || loading || viewMode !== 'list') return;
+    if (cursor === 0) { setIsScanningActive(false); return; }
+    const timer = setTimeout(() => { void fetchNextScan(); }, 150);
+    return () => clearTimeout(timer);
+  }, [isScanningActive, loading, cursor, viewMode, fetchNextScan]);
   // Register loaded keys into the global command palette (Cmd+K)
   useEffect(() => {
     if (keys.length === 0) return;
@@ -197,12 +190,12 @@ export const KeyExplorerPage: React.FC = () => {
   // Client-side filtering for TTL states
   const filteredKeys = useMemo(() => {
     return keys.filter((k) => {
-      if (ttlFilter === 'has_ttl') return k.ttl > 0;
+      if (ttlFilter === 'has_ttl') return remainingTtl(k) > 0;
       if (ttlFilter === 'no_ttl') return k.ttl === -1;
-      if (ttlFilter === 'expiring_1m') return k.ttl > 0 && k.ttl <= 60;
+      if (ttlFilter === 'expiring_1m') return remainingTtl(k) > 0 && remainingTtl(k) <= 60;
       return true;
     });
-  }, [keys, ttlFilter]);
+  }, [keys, ttlFilter, clock]);
 
   // Virtualizer setup
   const parentRef = useRef<HTMLDivElement>(null);
@@ -259,7 +252,8 @@ export const KeyExplorerPage: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-7rem)] flex flex-col gap-3">
+    <div className="h-[calc(100dvh-12rem)] min-h-[32rem] flex flex-col gap-3">
+      <div className="studio-feature-heading"><h1>Key Explorer</h1><p>Browse and edit the selected database with incremental SCAN reads.</p></div>
       {/* ─────────────────────────────────────────────────────────────
           TOOLBAR: Pattern search, filters, view toggle, progress
       ───────────────────────────────────────────────────────────── */}
@@ -482,7 +476,7 @@ export const KeyExplorerPage: React.FC = () => {
                     {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                       const item = filteredKeys[virtualRow.index];
                       const badge = getTypeBadgeConfig(item.type);
-                      const ttlInfo = formatTtl(item.ttl);
+                      const ttlInfo = formatTtl(remainingTtl(item));
                       const isSelected = selectedKeyParam === item.name;
                       const isChecked = selectedKeys.has(item.name);
 

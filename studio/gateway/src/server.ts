@@ -1,6 +1,8 @@
+import { parseCommandLine } from '../../../packages/shared/command-parser.mjs';
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { RedisGatewayClient } from './redis/client.js';
 import { SafetyEngine } from './safety/engine.js';
@@ -8,10 +10,15 @@ import { MetricsSampler } from './metrics/sampler.js';
 import { authenticateUser, createToken, verifyToken, refreshToken } from './auth/jwt.js';
 import { UserContext, MonitorEntry, MonitorFilter, PubSubMessageEvent } from './types.js';
 import { playgroundEngine } from './playground/engine.js';
+import { env } from './config/env.js';
+import { databaseContext } from './redis/context.js';
+import { LivePlayground, sandboxTokens } from './playground/live.js';
+import { isLocalPlayground } from './auth/playground.js';
 
 const app = Fastify({
   logger: {
-    level: process.env.LOG_LEVEL || 'info',
+    level: env.LOG_LEVEL,
+    serializers: { req: (req) => ({ method: req.method, url: req.url?.split('?')[0], hostname: req.hostname, remoteAddress: req.ip }) },
     redact: [
       'req.headers.authorization',
       'headers.authorization',
@@ -35,9 +42,7 @@ app.addHook('onSend', async (_req, reply) => {
 });
 
 // Locked CORS to allowed web origins
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:4000', 'http://127.0.0.1:4000'];
+const allowedOrigins = env.CORS_ORIGIN.split(',').map((s) => s.trim());
 
 await app.register(cors, {
   origin: (origin, cb) => {
@@ -53,9 +58,51 @@ await app.register(cors, {
 
 await app.register(websocket);
 
+// Industrial API Rate Limiting (120 req/min per IP, exempting health & WebSockets)
+await app.register(rateLimit, {
+  global: true,
+  max: 600,
+  timeWindow: '1 minute',
+  allowList: (req) => {
+    return req.url === '/health' || req.url.startsWith('/ws/');
+  },
+  errorResponseBuilder: (_req, context) => ({
+    statusCode: 429,
+    error: 'Too Many Requests',
+    message: `Rate limit exceeded. Maximum ${context.max} requests per minute allowed. Try again in ${Math.ceil(context.ttl / 1000)}s.`,
+  }),
+});
+
 const redisClient = new RedisGatewayClient();
 const safetyEngine = new SafetyEngine();
 const metricsSampler = new MetricsSampler(redisClient);
+const livePlayground = new LivePlayground(redisClient);
+const selectedPlayground = () => redisClient.getStatus().isDemo ? playgroundEngine : livePlayground;
+
+app.addHook('onClose', async () => { metricsSampler.stop(); redisClient.close(); });
+
+app.setErrorHandler((error, _req, reply) => {
+  const status = error.statusCode && error.statusCode >= 400 ? error.statusCode : 500;
+  reply.status(status).send({ code: error.code ?? 'ENGINE_ERROR', error: error.message,
+    message: error.message, hint: status === 501 ? 'This server does not expose this feature.' : 'Check the engine connection and retry.' });
+});
+
+app.addHook('onRequest', (req, reply, done) => {
+  const value = req.headers['x-redisx-db'] ?? '0';
+  const parsed = z.coerce.number().int().min(0).max(15).safeParse(value);
+  if (!parsed.success) { reply.status(400).send({ error: 'Database must be an integer from 0 to 15.' }); return; }
+  databaseContext.run(parsed.data, done);
+});
+
+// Protect HTTP and WebSocket upgrades before any route can touch the engine.
+app.addHook('preValidation', async (req, reply) => {
+  if (!req.url.startsWith('/api/') && !req.url.startsWith('/ws/')) return;
+  if (req.url.split('?')[0] === '/api/auth/login') return;
+  if (isLocalPlayground(env, req.ip)) return;
+  const queryToken = req.url.startsWith('/ws/') ? new URL(req.url, 'http://localhost').searchParams.get('token') : null;
+  const token = req.headers.authorization?.replace(/^Bearer /, '') ?? queryToken;
+  if (!token || !await verifyToken(token)) return reply.status(401).send({ code: 'UNAUTHORIZED', error: 'Sign in to RedisX Studio to continue.' });
+});
 
 // Login rate limiting state (Max 5 attempts / 60 seconds per IP or username)
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -76,10 +123,11 @@ function checkLoginRateLimit(key: string): boolean {
 
 // Auth helper
 async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<UserContext | null> {
+  if (isLocalPlayground(env, req.ip)) return { username: 'Local Explorer', role: 'admin' };
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    // For convenience in local dev, default to admin if not provided
-    return { username: 'default_admin', role: 'admin' };
+    reply.status(401).send({ error: 'Sign in to RedisX Studio to continue.' });
+    return null;
   }
   const token = authHeader.substring(7);
   const user = await verifyToken(token);
@@ -91,11 +139,12 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<Us
 }
 
 // 1. Health check
-app.get('/health', async () => {
+app.get('/health', async (req) => {
   const status = redisClient.getStatus();
   return {
     status: 'ok',
     gateway: 'healthy',
+    accessMode: isLocalPlayground(env, req.ip) ? 'playground' : 'authenticated',
     timestamp: new Date().toISOString(),
     redis: status,
   };
@@ -153,6 +202,29 @@ app.get('/api/capabilities', async (req, reply) => {
   return redisClient.getStatus();
 });
 
+const ConnectionSchema = z.object({ host: z.string().trim().min(1).max(253),
+  port: z.number().int().min(1).max(65535), password: z.string().optional(), tls: z.boolean().default(false) });
+for (const action of ['test', 'connect'] as const) {
+  app.post(`/api/connection/${action}`, async (req, reply) => {
+    const user = await requireAuth(req, reply);
+    if (!user) return;
+    if (user.role !== 'admin') return reply.status(403).send({ error: 'Changing or testing the shared engine connection requires an Administrator account.' });
+    const parsed = ConnectionSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Provide a host, a port between 1 and 65535, and a TLS setting.' });
+    try {
+      const result = action === 'test' ? await redisClient.testConnection(parsed.data) : await redisClient.configure(parsed.data);
+      if (action === 'connect') metricsSampler.reset();
+      return result;
+    } catch { return reply.status(502).send({ error: 'Could not connect to the engine. Check the host, port, password, and TLS setting.' }); }
+  });
+}
+app.post('/api/connection/demo', async (req, reply) => {
+  const user = await requireAuth(req, reply);
+  if (!user) return;
+  if (user.role !== 'admin') return reply.status(403).send({ error: 'Changing the shared connection requires an Administrator account.' });
+  const status = redisClient.useDemo(); metricsSampler.reset(); return status;
+});
+
 // 4. Redis INFO
 app.get('/api/info', async (req, reply) => {
   const user = await requireAuth(req, reply);
@@ -165,10 +237,13 @@ app.get('/api/keys', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
 
-  const query = req.query as any;
-  const cursor = Number(query.cursor) || 0;
-  const match = query.match || '*';
-  const rawCount = Number(query.count) || 100;
+  const parsedQuery = z.object({ cursor: z.coerce.number().int().nonnegative().default(0), match: z.string().max(1024).default('*'),
+    count: z.coerce.number().int().positive().default(100), type: z.enum(['all', 'string', 'list', 'hash', 'set', 'zset', 'stream']).default('all') }).safeParse(req.query);
+  if (!parsedQuery.success) return reply.status(400).send({ error: 'Use a nonnegative cursor, a positive count, and a supported key type.' });
+  const query = parsedQuery.data;
+  const cursor = query.cursor;
+  const match = query.match;
+  const rawCount = query.count;
   const count = Math.min(Math.max(1, rawCount), 1000); // capped to max 1000
   const type = query.type || 'all';
 
@@ -237,7 +312,8 @@ app.get('/api/key/:name', async (req, reply) => {
 // 6a. Create / Replace String Key
 const PutStringSchema = z.object({
   value: z.string(),
-  ttl: z.number().optional(),
+  ttl: z.number().int().refine(value => value === -1 || value > 0).optional(),
+  keepTtl: z.boolean().optional(),
 });
 
 app.put('/api/key/:name', async (req, reply) => {
@@ -250,10 +326,10 @@ app.put('/api/key/:name', async (req, reply) => {
     return reply.status(400).send({ error: 'Payload must contain a string value' });
   }
 
-  const { value, ttl } = parsed.data;
+  const { value, ttl, keepTtl } = parsed.data;
   if (!checkMutationSafety('SET', ['SET', name, value], user, reply)) return;
 
-  const res = await redisClient.setString(name, value, ttl);
+  const res = await redisClient.setString(name, value, ttl, keepTtl);
   safetyEngine.recordAudit(user.username, user.role, ['SET', name, value], 1, 'success');
   return { success: true, command: res.command, key: name };
 });
@@ -374,9 +450,9 @@ app.post('/api/key/:name/zset/add', async (req, reply) => {
   if (!user) return;
 
   const { name } = req.params as { name: string };
-  const body = req.body as any;
-  const member = String(body?.member ?? '');
-  const score = Number(body?.score ?? 0);
+  const parsed = z.object({ member: z.string(), score: z.number().finite() }).safeParse(req.body);
+  if (!parsed.success) return reply.status(400).send({ error: 'Provide a member string and a finite numeric score.' });
+  const { member, score } = parsed.data;
 
   if (!checkMutationSafety('ZADD', ['ZADD', name, String(score), member], user, reply)) return;
 
@@ -406,8 +482,9 @@ app.put('/api/key/:name/ttl', async (req, reply) => {
   if (!user) return;
 
   const { name } = req.params as { name: string };
-  const body = req.body as any;
-  const ttl = Number(body?.ttl ?? -1);
+  const parsed = z.object({ ttl: z.number().int().min(-1) }).safeParse(req.body);
+  if (!parsed.success) return reply.status(400).send({ error: 'Provide a whole-number TTL in seconds; use -1 to remove expiration.' });
+  const { ttl } = parsed.data;
 
   const cmd = ttl === -1 ? 'PERSIST' : 'EXPIRE';
   if (!checkMutationSafety(cmd, [cmd, name, String(ttl)], user, reply)) return;
@@ -435,9 +512,9 @@ app.post('/api/keys/delete', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
 
-  const body = req.body as any;
-  const keys: string[] = Array.isArray(body?.keys) ? body.keys : [];
-  const dryRun = Boolean(body?.dryRun);
+  const parsed = z.object({ keys: z.array(z.string()).max(10000), dryRun: z.boolean().default(false) }).safeParse(req.body);
+  if (!parsed.success) return reply.status(400).send({ error: 'Provide up to 10,000 key names and a boolean dryRun setting.' });
+  const { keys, dryRun } = parsed.data;
 
   if (dryRun) {
     const res = await redisClient.bulkDeleteKeys(keys, true);
@@ -456,15 +533,19 @@ app.post('/api/keys/create', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
 
-  const body = req.body as any;
-  const name = String(body?.name ?? '').trim();
-  const type = String(body?.type ?? 'string') as 'string' | 'list' | 'hash' | 'set' | 'zset';
-  const payload = body?.payload ?? {};
-  const ttl = body?.ttl !== undefined ? Number(body.ttl) : undefined;
-
-  if (!name) {
+  const base = { name: z.string().trim().min(1).max(4096), ttl: z.number().int().refine(ttl => ttl === -1 || ttl > 0).optional() };
+  const parsed = z.discriminatedUnion('type', [
+    z.object({ ...base, type: z.literal('string'), payload: z.object({ value: z.string() }) }),
+    z.object({ ...base, type: z.literal('list'), payload: z.object({ items: z.array(z.string()).min(1).max(1000) }) }),
+    z.object({ ...base, type: z.literal('hash'), payload: z.object({ entries: z.record(z.string()).refine(entries => Object.keys(entries).length > 0 && Object.keys(entries).length <= 1000) }) }),
+    z.object({ ...base, type: z.literal('set'), payload: z.object({ members: z.array(z.string()).min(1).max(1000) }) }),
+    z.object({ ...base, type: z.literal('zset'), payload: z.object({ members: z.array(z.tuple([z.string(), z.number().finite()])).min(1).max(1000) }) }),
+  ]).safeParse(req.body);
+  if (!req.body || !(req.body as { name?: string }).name) {
     return reply.status(400).send({ error: 'Key name is required' });
   }
+  if (!parsed.success) return reply.status(400).send({ error: 'Provide a key name, a supported data type, and its matching nonempty value or collection. TTL must be a positive integer or -1.' });
+  const { name, type, payload, ttl } = parsed.data;
 
   if (!checkMutationSafety('SET', ['SET', name, '...'], user, reply)) return;
 
@@ -480,55 +561,6 @@ const CommandSchema = z.object({
 });
 
 // Helper for parsing shell/redis-cli style quoted arguments
-function parseCommandLine(cmdStr: string): string[] {
-  const tokens: string[] = [];
-  let current = '';
-  let inDouble = false;
-  let inSingle = false;
-  let escapeNext = false;
-
-  for (let i = 0; i < cmdStr.length; i++) {
-    const ch = cmdStr[i];
-
-    if (escapeNext) {
-      current += ch;
-      escapeNext = false;
-      continue;
-    }
-
-    if (ch === '\\' && !inSingle) {
-      escapeNext = true;
-      continue;
-    }
-
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble;
-      continue;
-    }
-
-    if (ch === "'" && !inDouble) {
-      inSingle = !inSingle;
-      continue;
-    }
-
-    if (/\s/.test(ch) && !inDouble && !inSingle) {
-      if (current.length > 0) {
-        tokens.push(current);
-        current = '';
-      }
-      continue;
-    }
-
-    current += ch;
-  }
-
-  if (current.length > 0) {
-    tokens.push(current);
-  }
-
-  return tokens;
-}
-
 // 7a. Command Dictionary & Metadata (/api/commands)
 app.get('/api/commands', async (req, reply) => {
   const user = await requireAuth(req, reply);
@@ -608,6 +640,7 @@ app.post('/api/pipeline', async (req, reply) => {
 app.get('/api/audit', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
+  if (user.role !== 'admin') return reply.status(403).send({ error: 'The audit log requires an Administrator account.' });
   const limit = Number((req.query as any).limit) || 50;
   return safetyEngine.getAuditLog(limit);
 });
@@ -616,9 +649,12 @@ app.get('/api/audit', async (req, reply) => {
 app.get('/api/metrics/history', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
-  const range = ((req.query as any).range || '1h') as '15m' | '1h' | '6h' | '24h';
+  const parsed = z.object({ range: z.enum(['15m', '1h', '6h', '24h']).default('1h'), compare: z.enum(['true', 'false']).default('false') }).safeParse(req.query);
+  if (!parsed.success) return reply.status(400).send({ error: 'Choose a valid metrics range: 15m, 1h, 6h, or 24h.' });
+  const { range, compare } = parsed.data;
   const points = metricsSampler.getHistory(range);
-  return { range, points, count: points.length };
+  const previousPoints = compare === 'true' ? metricsSampler.getHistory(range, true) : [];
+  return { range, points, count: points.length, previousPoints };
 });
 
 // 10. Health Summary
@@ -630,9 +666,13 @@ app.get('/api/health-summary', async (req, reply) => {
 
 // 11. Health Summary Simulation (for testing transitions)
 app.post('/api/health-summary/simulate', async (req, reply) => {
+  if (process.env.NODE_ENV === 'production') {
+    return reply.status(403).send({ error: 'Simulation endpoints are disabled in production mode' });
+  }
   const user = await requireAuth(req, reply);
   if (!user) return;
   const { condition } = (req.body as any) || {};
+  if (!redisClient.getStatus().isDemo || user.role !== 'admin') return reply.status(403).send({ error: 'Health simulation requires demo mode and an Administrator account.' });
   metricsSampler.setSimulatedCondition(condition || null);
   return { ok: true, activeCondition: metricsSampler.getSimulatedCondition() };
 });
@@ -689,7 +729,7 @@ app.post('/api/memory/config', async (req, reply) => {
   if (!user) return;
 
   const body = (req.body as any) || {};
-  const unlock = Boolean(body.unlock);
+  const unlock = body.unlock === true;
   const maxmemory = body.maxmemory !== undefined ? parseMemoryBytes(body.maxmemory) : undefined;
   const policy = body.policy ? String(body.policy).trim() : undefined;
 
@@ -746,7 +786,7 @@ app.get('/api/expiration/stats', async (req, reply) => {
   });
 
   return {
-    expired_keys: (info as any)?.stats?.expired_keys || 320,
+    expired_keys: info.stats.expired_keys ?? 0,
     evicted_keys: (info as any)?.stats?.evicted_keys || 0,
     expired_rate: latest.expiredKeysPerSec,
     evicted_rate: latest.evictedKeysPerSec,
@@ -863,7 +903,7 @@ app.post('/api/slowlog/config', async (req, reply) => {
   if (!user) return;
 
   const body = (req.body as any) || {};
-  const unlock = Boolean(body.unlock);
+  const unlock = body.unlock === true;
   const microseconds = Number(body.microseconds);
 
   if (isNaN(microseconds) || microseconds < -1) {
@@ -990,7 +1030,7 @@ app.post('/api/replication/replicaof', async (req, reply) => {
   }
 
   const body = (req.body as any) || {};
-  const unlock = Boolean(body.unlock);
+  const unlock = body.unlock === true;
   if (!unlock) {
     return reply.status(403).send({
       code: 'ERR_SAFETY_BLOCKED',
@@ -1019,7 +1059,7 @@ app.post('/api/replication/promote', async (req, reply) => {
   }
 
   const body = (req.body as any) || {};
-  const unlock = Boolean(body.unlock);
+  const unlock = body.unlock === true;
   if (!unlock) {
     return reply.status(403).send({
       code: 'ERR_SAFETY_BLOCKED',
@@ -1128,7 +1168,7 @@ app.post('/api/config', async (req, reply) => {
   }
 
   const body = (req.body as any) || {};
-  const unlock = Boolean(body.unlock);
+  const unlock = body.unlock === true;
   if (!unlock) {
     return reply.status(403).send({
       code: 'ERR_SAFETY_BLOCKED',
@@ -1257,7 +1297,7 @@ app.post('/api/pubsub/publish', async (req, reply) => {
   try {
     const res = await redisClient.publishPubSub(channel, message);
     safetyEngine.recordAudit(user.username, user.role, ['PUBLISH', channel, message], 1, 'success');
-    broadcastPubSubMessage(channel, message);
+    if (redisClient.getStatus().isDemo) broadcastPubSubMessage(channel, message);
     return res;
   } catch (err: any) {
     safetyEngine.recordAudit(user.username, user.role, ['PUBLISH', channel], 1, 'error', err.message);
@@ -1270,7 +1310,8 @@ app.get('/ws/monitor', { websocket: true }, async (connectionOrSocket: any, req)
   const ws = connectionOrSocket?.socket || connectionOrSocket;
 
   // Validate operator+ role
-  let user: UserContext = { username: 'default_admin', role: 'admin' };
+  let user: UserContext = { username: 'unknown', role: 'viewer' };
+  if (isLocalPlayground(env, req.ip)) user = { username: 'Local Explorer', role: 'admin' };
   try {
     const urlObj = new URL(req.url, 'http://localhost');
     const token = urlObj.searchParams.get('token');
@@ -1421,7 +1462,14 @@ app.get('/ws/monitor', { websocket: true }, async (connectionOrSocket: any, req)
     }
   }
 
-  // Realistic simulated command stream
+  if (!redisClient.getStatus().isDemo) {
+    ws.send(JSON.stringify({ error: 'MONITOR is unavailable on this engine. No simulated traffic will be shown.' }));
+    ws.close();
+    cleanup();
+    return;
+  }
+
+  // Explicit demo mode only
   const sampleCommandsPool = [
     { client: '10.0.1.12:43210', cmd: 'GET', args: ['user:1001:profile'] },
     { client: '10.0.1.13:43212', cmd: 'SET', args: ['session:tok_99812', '{"auth":true}', 'EX', '3600'] },
@@ -1481,6 +1529,7 @@ app.get('/ws/pubsub', { websocket: true }, async (connectionOrSocket: any, req) 
 
   const dedicated = redisClient.createDedicatedClient();
   let dedicatedSub: any = null;
+  dedicated?.on('error', () => {});
 
   if (dedicated) {
     try {
@@ -1495,7 +1544,7 @@ app.get('/ws/pubsub', { websocket: true }, async (connectionOrSocket: any, req) 
             timestamp: Date.now(),
             timeStr: new Date().toLocaleTimeString(),
           };
-          ws.send(JSON.stringify(event));
+          if (ws.bufferedAmount < 65536) ws.send(JSON.stringify(event));
         } catch {}
       });
       dedicatedSub.on('pmessage', (pattern: string, channel: string, message: string) => {
@@ -1508,7 +1557,7 @@ app.get('/ws/pubsub', { websocket: true }, async (connectionOrSocket: any, req) 
             timestamp: Date.now(),
             timeStr: new Date().toLocaleTimeString(),
           };
-          ws.send(JSON.stringify(event));
+          if (ws.bufferedAmount < 65536) ws.send(JSON.stringify(event));
         } catch {}
       });
     } catch {
@@ -1540,6 +1589,7 @@ app.get('/ws/pubsub', { websocket: true }, async (connectionOrSocket: any, req) 
   };
 
   const demoInterval = setInterval(() => {
+    if (!redisClient.getStatus().isDemo) return;
     if (clientItem.channels.size === 0 && clientItem.patterns.size === 0) return;
 
     for (const ch of clientItem.channels) {
@@ -1589,6 +1639,9 @@ app.get('/ws/pubsub', { websocket: true }, async (connectionOrSocket: any, req) 
         const parsed = JSON.parse(data.toString());
         const { action, channel } = parsed;
         if (!channel || typeof channel !== 'string') return;
+        if (channel.length > 1024 || clientItem.channels.size + clientItem.patterns.size >= 100) {
+          ws.send(JSON.stringify({ error: 'Subscriptions are limited to 100 channels and patterns, each at most 1024 characters.' })); return;
+        }
 
         if (action === 'subscribe') {
           clientItem.channels.add(channel);
@@ -1651,7 +1704,9 @@ app.post('/api/playground/exec', async (req, reply) => {
   }
 
   try {
-    const result = await playgroundEngine.executeSandboxCommand(command, db);
+    const { tokens } = sandboxTokens(command);
+    if (!checkMutationSafety(tokens[0], tokens, user, reply)) return;
+    const result = await selectedPlayground().executeSandboxCommand(command, db);
     safetyEngine.recordAudit(user.username, user.role, ['PLAYGROUND', command], 1, 'success');
     return result;
   } catch (err: any) {
@@ -1676,7 +1731,7 @@ app.get('/api/playground/inspect/:key', async (req, reply) => {
     return reply.status(400).send({ error: "Playground keys must be prefixed with 'play:'." });
   }
 
-  return playgroundEngine.inspectKey(key);
+  return selectedPlayground().inspectKey(key);
 });
 
 // 3. GET /api/playground/reset/preview
@@ -1684,7 +1739,7 @@ app.get('/api/playground/reset/preview', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
 
-  return playgroundEngine.previewReset();
+  return selectedPlayground().previewReset();
 });
 
 // 4. POST /api/playground/reset
@@ -1692,7 +1747,8 @@ app.post('/api/playground/reset', async (req, reply) => {
   const user = await requireAuth(req, reply);
   if (!user) return;
 
-  const result = playgroundEngine.resetSandbox();
+  if (!checkMutationSafety('DEL', ['DEL', 'play:*'], user, reply)) return;
+  const result = await selectedPlayground().resetSandbox();
   safetyEngine.recordAudit(user.username, user.role, ['PLAYGROUND', 'RESET_SANDBOX'], 1, 'success');
   return result;
 });
@@ -1700,8 +1756,10 @@ app.post('/api/playground/reset', async (req, reply) => {
 // 12. WebSocket Telemetry Stream (1-second updates, slow client protection)
 app.get('/ws/metrics', { websocket: true }, (connectionOrSocket: any, req) => {
   const ws = connectionOrSocket?.socket || connectionOrSocket;
-
+  let sending = false;
   const timer = setInterval(async () => {
+    if (sending) return;
+    sending = true;
     try {
       // Slow client protection: skip sending if client buffer has not drained
       if (ws?.bufferedAmount > 65536) {
@@ -1718,10 +1776,13 @@ app.get('/ws/metrics', { websocket: true }, (connectionOrSocket: any, req) => {
           healthSummary: health,
           status,
           timestamp: Date.now(),
+          stale: Date.now() - sample.timestamp > 5000 || !['connected', 'demo'].includes(status.status),
         })
       );
     } catch {
       // client disconnected or socket closed
+    } finally {
+      sending = false;
     }
   }, 1000);
 
@@ -1732,16 +1793,13 @@ app.get('/ws/metrics', { websocket: true }, (connectionOrSocket: any, req) => {
   }
 });
 
-export { app, redisClient, safetyEngine };
+export { app, redisClient, safetyEngine, metricsSampler };
 
-if (process.env.NODE_ENV !== 'test') {
-  const PORT = Number(process.env.PORT) || 4000;
-  const HOST = process.env.HOST || '0.0.0.0';
-
+if (env.NODE_ENV !== 'test') {
   try {
-    await app.listen({ port: PORT, host: HOST });
-    console.log(`🚀 RedisX Studio Gateway listening on http://${HOST}:${PORT}`);
-    console.log(`📊 Health Endpoint: http://localhost:${PORT}/health`);
+    await app.listen({ port: env.PORT, host: env.HOST });
+    console.log(`🚀 RedisX Studio Gateway listening on http://${env.HOST}:${env.PORT} (${env.NODE_ENV} mode)`);
+    console.log(`📊 Health Endpoint: http://localhost:${env.PORT}/health`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -8,6 +8,8 @@ export interface UserContext {
 }
 
 export interface ConnectionStatus {
+  capabilitiesState?: 'pending' | 'ready' | 'error';
+  tlsEnabled?: boolean;
   status: 'connected' | 'connecting' | 'error' | 'demo';
   host: string;
   port: number;
@@ -48,6 +50,8 @@ export interface ParsedRedisInfo {
     tcp_port: number;
     role: string;
     os?: string;
+    process_id?: number;
+    redis_mode?: string;
   };
   clients: {
     connected_clients: number;
@@ -68,6 +72,11 @@ export interface ParsedRedisInfo {
     keyspace_hits: number;
     keyspace_misses: number;
     hit_rate: number;
+    evicted_keys?: number;
+    expired_keys?: number;
+    rejected_connections?: number;
+    total_net_input_bytes?: number;
+    total_net_output_bytes?: number;
   };
   replication: {
     role: string;
@@ -119,7 +128,11 @@ export interface MetricSample {
   expiredKeysPerSec: number;
   networkInputBytesPerSec: number;
   networkOutputBytesPerSec: number;
-  p99LatencyMs: number;
+  networkAvailable?: boolean;
+  networkScope?: 'engine' | 'gateway';
+  p99LatencyMs: number | null;
+  infoLatencyMs?: number;
+  replicationOffsetBytes?: number;
   p50LatencyMs?: number;
   p90LatencyMs?: number;
   opsByCommand?: Record<string, number>;
@@ -159,9 +172,9 @@ export interface KeyDetailResponse {
   listItems?: Array<{ index: number; value: string }>;
   listPage?: { page: number; limit: number; total: number; hasMore: boolean };
   hashEntries?: Array<{ field: string; value: string }>;
-  hashPage?: { page: number; limit: number; total: number; hasMore: boolean };
+  hashPage?: { page: number; limit: number; total: number; hasMore: boolean; nextCursor?: number };
   setMembers?: string[];
-  setPage?: { page: number; limit: number; total: number; hasMore: boolean };
+  setPage?: { page: number; limit: number; total: number; hasMore: boolean; nextCursor?: number };
   zsetMembers?: Array<{ rank: number; member: string; score: number }>;
   zsetPage?: { page: number; limit: number; total: number; hasMore: boolean };
 }
@@ -413,7 +426,7 @@ export interface PersistenceInfoResponse {
   loading: boolean;
   rdbLastSaveTime: number;
   rdbLastSaveTimeIso: string;
-  rdbLastBgsaveStatus: 'ok' | 'err';
+  rdbLastBgsaveStatus: 'ok' | 'err' | 'unknown';
   rdbLastBgsaveTimeSec: number;
   rdbCurrentBgsaveTimeSec: number;
   rdbBgsaveInProgress: boolean;
@@ -425,7 +438,7 @@ export interface PersistenceInfoResponse {
   aofRewriteScheduled: boolean;
   aofLastRewriteTimeSec: number;
   aofCurrentRewriteTimeSec: number;
-  aofLastBgrewriteStatus: 'ok' | 'err';
+  aofLastBgrewriteStatus: 'ok' | 'err' | 'unknown';
   aofCurrentSize: number;
   aofBaseSize: number;
   aofBufferDelay: number;

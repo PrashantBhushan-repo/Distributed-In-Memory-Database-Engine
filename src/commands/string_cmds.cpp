@@ -2,7 +2,9 @@
 #include "redisx/proto/resp_writer.h"
 
 #include <charconv>
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -42,94 +44,44 @@ std::string to_upper(std::string_view sv) {
 
 } // namespace
 
-bool string_match_glob(std::string_view pattern, std::string_view string, bool ignore_case) noexcept {
-    const char *p = pattern.data();
-    const char *p_end = pattern.data() + pattern.size();
-    const char *s = string.data();
-    const char *s_end = string.data() + string.size();
-
-    while (p < p_end && s < s_end) {
-        switch (*p) {
-        case '*':
-            while (p + 1 < p_end && *(p + 1) == '*') {
-                p++;
-            }
-            if (p + 1 == p_end) {
-                return true;
-            }
-            while (s < s_end) {
-                if (string_match_glob({p + 1, static_cast<std::size_t>(p_end - (p + 1))},
-                                      {s, static_cast<std::size_t>(s_end - s)}, ignore_case)) {
-                    return true;
+bool string_match_glob(std::string_view pattern, std::string_view text, bool ignore_case) noexcept {
+    std::size_t p = 0, t = 0, star = std::string_view::npos, retry = 0;
+    const auto fold = [ignore_case](unsigned char c) { return ignore_case ? std::tolower(c) : static_cast<int>(c); };
+    while (t < text.size()) {
+        if (p < pattern.size() && pattern[p] == '*') { star = ++p; retry = t; continue; }
+        auto next = p;
+        bool matched = false;
+        if (next < pattern.size()) {
+            const auto token = pattern[next++];
+            if (token == '?') matched = true;
+            else if (token == '[') {
+                const bool negate = next < pattern.size() && pattern[next] == '^';
+                if (negate) ++next;
+                bool any = false;
+                while (next < pattern.size() && pattern[next] != ']') {
+                    auto first = pattern[next++];
+                    if (first == '\\' && next < pattern.size()) first = pattern[next++];
+                    if (next + 1 < pattern.size() && pattern[next] == '-' && pattern[next + 1] != ']') {
+                        ++next; auto last = pattern[next++];
+                        auto low = fold(static_cast<unsigned char>(first)), high = fold(static_cast<unsigned char>(last));
+                        if (low > high) std::swap(low, high);
+                        const auto c = fold(static_cast<unsigned char>(text[t])); any |= c >= low && c <= high;
+                    } else any |= fold(static_cast<unsigned char>(first)) == fold(static_cast<unsigned char>(text[t]));
                 }
-                s++;
+                if (next < pattern.size() && pattern[next] == ']') ++next;
+                matched = negate ? !any : any;
+            } else {
+                auto literal = token;
+                if (literal == '\\' && next < pattern.size()) literal = pattern[next++];
+                matched = fold(static_cast<unsigned char>(literal)) == fold(static_cast<unsigned char>(text[t]));
             }
-            return false;
-        case '?':
-            s++;
-            p++;
-            break;
-        case '[': {
-            p++;
-            bool not_flag = false;
-            if (p < p_end && *p == '^') {
-                not_flag = true;
-                p++;
-            }
-            bool match = false;
-            while (p < p_end && *p != ']') {
-                if (p + 2 < p_end && *(p + 1) == '-') {
-                    char start = *p;
-                    char end = *(p + 2);
-                    if (*s >= start && *s <= end) {
-                        match = true;
-                    }
-                    p += 3;
-                } else {
-                    if (*p == *s) {
-                        match = true;
-                    }
-                    p++;
-                }
-            }
-            if (p < p_end && *p == ']') {
-                p++;
-            }
-            if (not_flag) {
-                match = !match;
-            }
-            if (!match) {
-                return false;
-            }
-            s++;
-            break;
         }
-        case '\\':
-            if (p + 1 < p_end) {
-                p++;
-            }
-            [[fallthrough]];
-        default:
-            char c1 = *p;
-            char c2 = *s;
-            if (ignore_case) {
-                c1 = static_cast<char>(std::tolower(static_cast<unsigned char>(c1)));
-                c2 = static_cast<char>(std::tolower(static_cast<unsigned char>(c2)));
-            }
-            if (c1 != c2) {
-                return false;
-            }
-            p++;
-            s++;
-            break;
-        }
+        if (matched) { p = next; ++t; }
+        else if (star != std::string_view::npos) { p = star; t = ++retry; }
+        else return false;
     }
-
-    while (p < p_end && *p == '*') {
-        p++;
-    }
-
-    return (p == p_end && s == s_end);
+    while (p < pattern.size() && pattern[p] == '*') ++p;
+    return p == pattern.size();
 }
 
 void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, obs::ServerStats *stats) {
@@ -142,7 +94,9 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
         CMD_FLAG_READONLY,
         [](const proto::Command &cmd, db::Keyspace &/*keyspace*/, std::size_t /*db_idx*/,
            core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            if (cmd.arg_count() <= 1) {
+            if (cmd.arg_count() > 2) {
+                proto::RespWriter::write_error(out_buf, "ERR wrong number of arguments for 'ping' command");
+            } else if (cmd.arg_count() <= 1) {
                 proto::RespWriter::write_simple_string(out_buf, "PONG");
             } else {
                 proto::RespWriter::write_bulk_string(out_buf, cmd.arg(1));
@@ -226,130 +180,60 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
     // ------------------------------------------------------------
     // SET key value [NX|XX] [GET] [EX s|PX ms|EXAT s|PXAT ms|KEEPTTL]
     // ------------------------------------------------------------
-    dispatcher.register_command({
-        "SET",
-        -3,
-        CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
+    dispatcher.register_command({"SET", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM,
         [&ttl_mgr](const proto::Command &cmd, db::Keyspace &keyspace, std::size_t db_idx,
-                   core::Buffer &out_buf, std::size_t &/*out_db_idx*/) {
-            const std::string &key = cmd.arg(1);
-            const std::string &val = cmd.arg(2);
-
-            bool nx = false;
-            bool xx = false;
-            bool get_opt = false;
-            bool keepttl = false;
-            std::uint64_t expire_at_ms = 0;
-            bool set_expire = false;
-
-            std::uint64_t now = ttl_mgr.time_provider().monotonic_now_ms();
-
+                   core::Buffer &out_buf, std::size_t &) {
+            bool nx = false, xx = false, get = false, keep = false, expires = false;
+            std::uint64_t deadline = 0;
+            const auto now = ttl_mgr.time_provider().wall_now_ms();
             for (std::size_t i = 3; i < cmd.arg_count(); ++i) {
-                std::string opt = to_upper(cmd.arg(i));
-                if (opt == "NX") {
-                    nx = true;
-                } else if (opt == "XX") {
-                    xx = true;
-                } else if (opt == "GET") {
-                    get_opt = true;
-                } else if (opt == "KEEPTTL") {
-                    keepttl = true;
-                } else if (opt == "EX" && i + 1 < cmd.arg_count()) {
-                    std::int64_t s = 0;
-                    if (!parse_int64(cmd.arg(++i), s) || s <= 0) {
-                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
-                        return;
+                const auto option = to_upper(cmd.arg(i));
+                if (option == "NX") nx = true;
+                else if (option == "XX") xx = true;
+                else if (option == "GET") get = true;
+                else if (option == "KEEPTTL") {
+                    if (expires) { proto::RespWriter::write_error(out_buf, "ERR syntax error"); return; }
+                    keep = true;
+                } else if (option == "EX" || option == "PX" || option == "EXAT" || option == "PXAT") {
+                    if (keep || expires || i + 1 >= cmd.arg_count()) {
+                        proto::RespWriter::write_error(out_buf, "ERR syntax error"); return;
                     }
-                    expire_at_ms = now + static_cast<std::uint64_t>(s) * 1000;
-                    set_expire = true;
-                } else if (opt == "PX" && i + 1 < cmd.arg_count()) {
-                    std::int64_t ms = 0;
-                    if (!parse_int64(cmd.arg(++i), ms) || ms <= 0) {
-                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
-                        return;
+                    std::int64_t value = 0;
+                    const std::int64_t scale = option.front() == 'E' ? 1000 : 1;
+                    if (!parse_int64(cmd.arg(++i), value) || value <= 0 || value > std::numeric_limits<std::int64_t>::max() / scale) {
+                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command"); return;
                     }
-                    expire_at_ms = now + static_cast<std::uint64_t>(ms);
-                    set_expire = true;
-                } else if (opt == "EXAT" && i + 1 < cmd.arg_count()) {
-                    std::int64_t ts_s = 0;
-                    if (!parse_int64(cmd.arg(++i), ts_s) || ts_s <= 0) {
-                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
-                        return;
+                    deadline = static_cast<std::uint64_t>(value * scale);
+                    if (!option.ends_with("AT")) {
+                        if (deadline > static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) - now) {
+                            proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command"); return;
+                        }
+                        deadline += now;
                     }
-                    expire_at_ms = static_cast<std::uint64_t>(ts_s) * 1000;
-                    set_expire = true;
-                } else if (opt == "PXAT" && i + 1 < cmd.arg_count()) {
-                    std::int64_t ts_ms = 0;
-                    if (!parse_int64(cmd.arg(++i), ts_ms) || ts_ms <= 0) {
-                        proto::RespWriter::write_error(out_buf, "ERR invalid expire time in 'set' command");
-                        return;
-                    }
-                    expire_at_ms = static_cast<std::uint64_t>(ts_ms);
-                    set_expire = true;
-                }
+                    expires = true;
+                } else { proto::RespWriter::write_error(out_buf, "ERR syntax error"); return; }
             }
-
-            if (nx && xx) {
-                proto::RespWriter::write_error(out_buf, "ERR syntax error");
+            if (nx && xx) { proto::RespWriter::write_error(out_buf, "ERR syntax error"); return; }
+            const bool expired = ttl_mgr.expire_if_needed(keyspace, db_idx, cmd.arg(1));
+            auto *entry = expired ? nullptr : keyspace.db_get(db_idx, cmd.arg(1));
+            if (get && entry && !entry->value.is_string()) {
+                proto::RespWriter::write_error(out_buf, "WRONGTYPE Operation against a key holding the wrong kind of value"); return;
+            }
+            const bool exists = entry != nullptr;
+            std::optional<std::string> old;
+            if (get && entry) old = entry->value.as_string();
+            if ((nx && exists) || (xx && !exists)) {
+                if (get && old) proto::RespWriter::write_bulk_string(out_buf, *old);
+                else proto::RespWriter::write_null_bulk(out_buf);
                 return;
             }
-
-            // Lazy expire check first
-            ttl_mgr.expire_if_needed(keyspace, db_idx, key);
-
-            bool exists = keyspace.db_exists(db_idx, key);
-            if (nx && exists) {
-                if (get_opt) {
-                    db::Entry *e = keyspace.db_get(db_idx, key);
-                    if (e != nullptr && e->value.is_string()) {
-                        proto::RespWriter::write_bulk_string(out_buf, e->value.as_string());
-                    } else {
-                        proto::RespWriter::write_null_bulk(out_buf);
-                    }
-                } else {
-                    proto::RespWriter::write_null_bulk(out_buf);
-                }
-                return;
-            }
-
-            if (xx && !exists) {
-                proto::RespWriter::write_null_bulk(out_buf);
-                return;
-            }
-
-            std::string old_val;
-            bool had_old_val = false;
-            if (get_opt && exists) {
-                db::Entry *e = keyspace.db_get(db_idx, key);
-                if (e != nullptr && e->value.is_string()) {
-                    old_val = e->value.as_string();
-                    had_old_val = true;
-                }
-            }
-
-            std::uint64_t target_expire = 0;
-            if (set_expire) {
-                target_expire = expire_at_ms;
-            } else if (keepttl && exists) {
-                db::Entry *e = keyspace.db_get(db_idx, key);
-                if (e != nullptr) {
-                    target_expire = e->expire_at_ms;
-                }
-            } // Else plain SET clears TTL (target_expire = 0)
-
-            keyspace.db_set(db_idx, key, db::Value(val), target_expire);
-
-            if (get_opt) {
-                if (had_old_val) {
-                    proto::RespWriter::write_bulk_string(out_buf, old_val);
-                } else {
-                    proto::RespWriter::write_null_bulk(out_buf);
-                }
-            } else {
-                proto::RespWriter::write_simple_string(out_buf, "OK");
-            }
-        }
-    });
+            if (keep && entry) deadline = entry->expire_at_ms;
+            keyspace.db_set(db_idx, cmd.arg(1), db::Value(cmd.arg(2)), deadline);
+            if (get) {
+                if (old) proto::RespWriter::write_bulk_string(out_buf, *old);
+                else proto::RespWriter::write_null_bulk(out_buf);
+            } else proto::RespWriter::write_simple_string(out_buf, "OK");
+        }});
 
     // ------------------------------------------------------------
     // GET key
@@ -531,6 +415,10 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
                 existing_ttl = e->expire_at_ms;
             }
 
+            if (val == std::numeric_limits<std::int64_t>::max()) {
+                proto::RespWriter::write_error(out_buf, "ERR increment or decrement would overflow");
+                return;
+            }
             val++;
             keyspace.db_set(db_idx, key, db::Value(std::to_string(val)), existing_ttl);
             proto::RespWriter::write_integer(out_buf, val);
@@ -566,6 +454,10 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
                 existing_ttl = e->expire_at_ms;
             }
 
+            if (val == std::numeric_limits<std::int64_t>::min()) {
+                proto::RespWriter::write_error(out_buf, "ERR increment or decrement would overflow");
+                return;
+            }
             val--;
             keyspace.db_set(db_idx, key, db::Value(std::to_string(val)), existing_ttl);
             proto::RespWriter::write_integer(out_buf, val);
@@ -607,6 +499,10 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
                 existing_ttl = e->expire_at_ms;
             }
 
+            if ((incr > 0 && val > std::numeric_limits<std::int64_t>::max() - incr) || (incr < 0 && val < std::numeric_limits<std::int64_t>::min() - incr)) {
+                proto::RespWriter::write_error(out_buf, "ERR increment or decrement would overflow");
+                return;
+            }
             val += incr;
             keyspace.db_set(db_idx, key, db::Value(std::to_string(val)), existing_ttl);
             proto::RespWriter::write_integer(out_buf, val);
@@ -691,17 +587,19 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
                     match_pattern = cmd.arg(++i);
                 } else if (opt == "COUNT" && i + 1 < cmd.arg_count()) {
                     std::int64_t c = 10;
-                    if (parse_int64(cmd.arg(++i), c) && c > 0) {
-                        count_hint = static_cast<std::size_t>(c);
-                    }
-                }
+                    if (!parse_int64(cmd.arg(++i), c) || c <= 0) { proto::RespWriter::write_error(out_buf, "ERR value is not an integer or out of range"); return; }
+                    count_hint = static_cast<std::size_t>(c);
+                } else { proto::RespWriter::write_error(out_buf, "ERR syntax error"); return; }
             }
 
             const db::Dict &dict = keyspace.get_db(db_idx);
             std::vector<std::string> keys;
 
             std::uint64_t next_cursor = cursor;
+            std::size_t scans = 0;
+            const auto max_scans = count_hint > SIZE_MAX / 10 ? SIZE_MAX : count_hint * 10;
             do {
+                ++scans;
                 next_cursor = dict.scan(next_cursor, [&](const db::Entry *e) {
                     if (e != nullptr) {
                         if (!ttl_mgr.expire_if_needed(keyspace, db_idx, e->key)) {
@@ -711,7 +609,7 @@ void register_string_commands(Dispatcher &dispatcher, db::TTLManager &ttl_mgr, o
                         }
                     }
                 });
-            } while (next_cursor != 0 && keys.size() < count_hint);
+            } while (next_cursor != 0 && keys.size() < count_hint && scans < max_scans);
 
             // Output array: [next_cursor_str, [keys...]]
             proto::RespWriter::write_array_header(out_buf, 2);

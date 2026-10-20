@@ -1,0 +1,65 @@
+[
+  {
+    "seconds": 0,
+    "heapMB": 15.6,
+    "rendererPrivateMB": 150,
+    "nodes": 1792,
+    "listeners": 1595,
+    "charts": 2,
+    "status": "Waiting for live readings · 173 samples · Updated 04:10:47"
+  },
+  {
+    "seconds": 10,
+    "heapMB": 27.8,
+    "rendererPrivateMB": 175,
+    "nodes": 2027,
+    "listeners": 1620,
+    "charts": 2,
+    "status": "Live · 184 samples · Updated 04:10:58"
+  },
+  {
+    "seconds": 20,
+    "heapMB": 34,
+    "rendererPrivateMB": 193,
+    "nodes": 2887,
+    "listeners": 1708,
+    "charts": 2,
+    "status": "Live · 194 samples · Updated 04:11:08"
+  },
+  {
+    "seconds": 30,
+    "heapMB": 54.1,
+    "rendererPrivateMB": 217,
+    "nodes": 3668,
+    "listeners": 1788,
+    "charts": 2,
+    "status": "Live · 204 samples · Updated 04:11:18"
+  },
+  {
+    "seconds": 40,
+    "heapMB": 46.9,
+    "rendererPrivateMB": 229,
+    "nodes": 4449,
+    "listeners": 1868,
+    "charts": 2,
+    "status": "Live · 215 samples · Updated 04:11:29"
+  },
+  {
+    "seconds": 50,
+    "heapMB": 21.3,
+    "rendererPrivateMB": 230,
+    "nodes": 2100,
+    "listeners": 1628,
+    "charts": 2,
+    "status": "Live · 225 samples · Updated 04:11:39"
+  },
+  {
+    "seconds": 60,
+    "heapMB": 41.2,
+    "rendererPrivateMB": 226,
+    "nodes": 2872,
+    "listeners": 1708,
+    "charts": 2,
+    "status": "Live · 236 samples · Updated 04:11:51"
+  }
+]

@@ -76,7 +76,7 @@ export const StringEditor: React.FC<StringEditorProps> = ({
       const res = await fetch(`/api/key/${encodeURIComponent(detail.name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: currentValue, ttl: detail.ttl > 0 ? detail.ttl : undefined }),
+        body: JSON.stringify({ value: currentValue, keepTtl: true }),
       });
       const data = await res.json();
       if (res.ok) {

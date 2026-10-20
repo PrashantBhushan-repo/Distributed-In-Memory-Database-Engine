@@ -16,8 +16,10 @@ import { TopKeysTable } from '../features/memory/TopKeysTable';
 import { PolicySelectorCard } from '../features/memory/PolicySelectorCard';
 import { EvictionSimulator } from '../features/memory/EvictionSimulator';
 import { EvictionTimeline } from '../features/memory/EvictionTimeline';
+import { useEngineAddress } from '../utils/useEngineAddress';
 
 export const MemoryPage: React.FC = () => {
+  const engineAddress = useEngineAddress();
   const [overview, setOverview] = useState<MemoryOverview | null>(null);
   const [topKeys, setTopKeys] = useState<TopKey[]>([]);
   const [sampledCount, setSampledCount] = useState(0);
@@ -84,7 +86,7 @@ export const MemoryPage: React.FC = () => {
                 Memory &amp; Eviction Manager
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                127.0.0.1:6379
+                {engineAddress}
               </span>
             </div>
             <p className="text-xs text-slate-400">

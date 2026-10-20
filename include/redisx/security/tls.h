@@ -39,9 +39,21 @@ class PlainTransport : public Transport {
     int fd_{-1};
 };
 
+class TlsContext {
+public:
+    TlsContext(const std::string &cert_file, const std::string &key_file);
+    ~TlsContext();
+    TlsContext(const TlsContext &) = delete;
+    TlsContext &operator=(const TlsContext &) = delete;
+    [[nodiscard]] void *native() const { return context_; }
+private:
+    void *context_{nullptr};
+};
+
 class TlsTransport : public Transport {
   public:
     TlsTransport(int fd, const std::string &cert_file, const std::string &key_file);
+    TlsTransport(int fd, std::shared_ptr<TlsContext> context);
     ~TlsTransport() override { close(); }
 
     ssize_t read(void *buf, size_t count) override;
@@ -55,7 +67,8 @@ class TlsTransport : public Transport {
     int fd_{-1};
     bool want_read_{false};
     bool want_write_{false};
-    void *ssl_ctx_{nullptr};
+    std::shared_ptr<TlsContext> context_;
+    ssize_t translate_result(int result);
     void *ssl_{nullptr};
 };
 

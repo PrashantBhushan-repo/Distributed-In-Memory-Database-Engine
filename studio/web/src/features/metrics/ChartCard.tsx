@@ -1,293 +1,89 @@
-import React, { useState } from 'react';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  CartesianGrid,
-} from 'recharts';
-import { Download, Bell, BellRing, Check, X, ShieldAlert } from 'lucide-react';
-import { exportChartToCsv } from './lttb';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
+import { Download, Bell, BellRing, Check, X } from 'lucide-react';
+import { downsampleLTTB, exportChartToCsv } from './lttb';
+import { mergeComparison } from './history';
+import { formatMetricAxis, formatMetricTime, formatMetricTooltip, MAX_CHART_POINTS } from './format';
 
-export interface ChartSeries {
-  key: string;
-  name: string;
-  color: string;
-  unit?: string;
-  dashed?: boolean;
-}
+const CHART_MARGIN = { top: 10, right: 15, left: 0, bottom: 0 };
+const AUTO_DOMAIN: ['auto', 'auto'] = ['auto', 'auto'];
+const TIME_DOMAIN: ['dataMin', 'dataMax'] = ['dataMin', 'dataMax'];
+const PERCENT_DOMAIN: [number, number] = [0, 100];
+const TOOLTIP_STYLE = { backgroundColor: '#0f172a', borderColor: '#475569', borderRadius: 8, color: '#f8fafc', fontSize: 12 };
+const EMPTY_POINTS: Record<string, any>[] = [];
 
+export interface ChartSeries { key: string; name: string; color: string; unit?: string; dashed?: boolean; }
 interface ChartCardProps {
-  id: string;
-  title: string;
-  description?: string;
-  currentValue: string;
-  data: any[];
-  comparedData?: any[];
-  series: ChartSeries[];
-  compareSeries?: ChartSeries[];
-  yUnit?: string;
-  threshold?: number;
-  onSaveThreshold?: (id: string, value: number | null) => void;
-  isCompareActive?: boolean;
+  id: string; title: string; description?: string; currentValue: string;
+  data: Record<string, any>[]; comparedData?: Record<string, any>[]; series: ChartSeries[];
+  yUnit?: string; threshold?: number; onSaveThreshold?: (id: string, value: number | null) => void;
+  isCompareActive?: boolean; emptyMessage?: string;
+  thresholdKey?: string; isActive?: boolean;
 }
-
-export const ChartCard: React.FC<ChartCardProps> = ({
-  id,
-  title,
-  description,
-  currentValue,
-  data,
-  comparedData = [],
-  series,
-  compareSeries = [],
-  yUnit = '',
-  threshold,
-  onSaveThreshold,
-  isCompareActive = false,
-}) => {
-  const [showThresholdModal, setShowThresholdModal] = useState(false);
-  const [thresholdInput, setThresholdInput] = useState<string>(
-    threshold !== undefined && threshold !== null ? String(threshold) : ''
-  );
-
-  const handleExportCsv = () => {
-    const columns = [
-      { key: 'timestamp', header: 'Timestamp' },
-      ...series.map((s) => ({ key: s.key, header: s.name })),
-    ];
-    exportChartToCsv(`redis-${id}-${new Date().toISOString().slice(0, 10)}`, data, columns);
+const ChartCardComponent: React.FC<ChartCardProps> = ({ id, title, description, currentValue, data, comparedData = EMPTY_POINTS, series, yUnit = '', threshold, onSaveThreshold, isCompareActive = false, emptyMessage, thresholdKey = id, isActive = true }) => {
+  const [showThreshold, setShowThreshold] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState('');
+  const plot = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const hasData = data.some(point => series.some(item => typeof point[item.key] === 'number' && Number.isFinite(point[item.key])));
+  const firstKey = series[0]?.key;
+  let current: number | undefined;
+  for (let index = data.length - 1; index >= 0; index--) { if (typeof data[index][firstKey] === 'number') { current = data[index][firstKey]; break; } }
+  useEffect(() => {
+    if (!hasData || !plot.current) return;
+    if (typeof IntersectionObserver === 'undefined') { setIsVisible(true); return; }
+    const observer = new IntersectionObserver(entries => setIsVisible(entries[0]?.isIntersecting ?? false), { rootMargin: '80px' });
+    observer.observe(plot.current);
+    return () => observer.disconnect();
+  }, [hasData]);
+  const renderPlot = isActive && isVisible;
+  const breached = hasData && threshold !== undefined && current !== undefined && (id === 'hitrate' ? current < threshold : current > threshold);
+  const mergedData = useMemo(() => {
+    if (!renderPlot) return EMPTY_POINTS;
+    const reduce = (points: Record<string, any>[]) => downsampleLTTB(points, MAX_CHART_POINTS, point => point.timestamp, point => point[firstKey] ?? 0);
+    return isCompareActive ? mergeComparison(reduce(data), reduce(comparedData), series.map(item => item.key)) : reduce(data);
+  }, [data, comparedData, series, firstKey, isCompareActive, renderPlot]);
+  const exportCsv = () => exportChartToCsv(`redis-${id}-${new Date().toISOString().slice(0, 10)}`, data,
+    [{ key: 'timestamp', header: 'Timestamp (UTC)' }, ...series.map(item => ({ key: item.key, header: `${item.name} (${item.unit || yUnit})` }))]);
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = Number(thresholdInput);
+    if (thresholdInput.trim() && Number.isFinite(value) && value >= 0) { onSaveThreshold?.(thresholdKey, value); setShowThreshold(false); }
   };
-
-  const handleSaveThreshold = (e: React.FormEvent) => {
-    e.preventDefault();
-    const val = parseFloat(thresholdInput);
-    if (!isNaN(val) && val > 0) {
-      onSaveThreshold?.(id, val);
-    } else {
-      onSaveThreshold?.(id, null);
-    }
-    setShowThresholdModal(false);
-  };
-
-  const handleClearThreshold = () => {
-    setThresholdInput('');
-    onSaveThreshold?.(id, null);
-    setShowThresholdModal(false);
-  };
-
-  // Merge current and comparison data for chart if comparison active
-  const mergedData = React.useMemo(() => {
-    if (!isCompareActive || !comparedData || comparedData.length === 0) {
-      return data;
-    }
-    return data.map((item, idx) => {
-      const compItem = comparedData[idx];
-      const merged: any = { ...item };
-      if (compItem) {
-        series.forEach((s) => {
-          merged[`${s.key}_prev`] = compItem[s.key];
-        });
-      }
-      return merged;
-    });
-  }, [data, comparedData, isCompareActive, series]);
-
-  return (
-    <div className="relative flex flex-col bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm hover:border-slate-700 transition-colors">
-      {/* Top Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
-            {threshold !== undefined && threshold !== null && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                <ShieldAlert className="w-2.5 h-2.5" />
-                Limit: {threshold} {yUnit}
-              </span>
-            )}
-          </div>
-          {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
-        </div>
-
-        {/* Value + Actions */}
-        <div className="flex items-center gap-2">
-          <span className="text-base font-bold font-mono text-slate-100">{currentValue}</span>
-
-          <div className="flex items-center gap-1 border-l border-slate-800 pl-2">
-            {/* Threshold Alert Config */}
-            <button
-              onClick={() => setShowThresholdModal(true)}
-              title={threshold ? 'Edit threshold alert line' : 'Set threshold alert line'}
-              className={`p-1.5 rounded-lg border transition-colors ${
-                threshold
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-              }`}
-            >
-              {threshold ? <BellRing className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
-            </button>
-
-            {/* CSV Download */}
-            <button
-              onClick={handleExportCsv}
-              title="Download CSV"
-              className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Threshold Modal Popover */}
-      {showThresholdModal && (
-        <div className="absolute top-12 right-4 z-30 w-72 bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-xl">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-200">Set Alert Threshold</span>
-            <button
-              onClick={() => setShowThresholdModal(false)}
-              className="text-slate-400 hover:text-slate-200"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <p className="text-[11px] text-slate-400 mb-2">
-            Renders a warning threshold line and tints the elevated region. Saved locally.
-          </p>
-          <form onSubmit={handleSaveThreshold} className="space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                step="any"
-                placeholder={`Value (${yUnit || 'units'})`}
-                value={thresholdInput}
-                onChange={(e) => setThresholdInput(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-100 focus:outline-none focus:border-red-500 font-mono"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-medium flex items-center gap-1"
-              >
-                <Check className="w-3 h-3" /> Save
-              </button>
-            </div>
-            {threshold && (
-              <button
-                type="button"
-                onClick={handleClearThreshold}
-                className="w-full text-center text-[11px] text-slate-400 hover:text-red-400 pt-1"
-              >
-                Clear current threshold
-              </button>
-            )}
-          </form>
-        </div>
-      )}
-
-      {/* Recharts Canvas */}
-      <div className="h-44 w-full mt-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={mergedData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis
-              dataKey="timestamp"
-              stroke="#64748b"
-              fontSize={10}
-              tickLine={false}
-              tickFormatter={(ts) => {
-                const d = new Date(ts);
-                return `${d.getHours().toString().padStart(2, '0')}:${d
-                  .getMinutes()
-                  .toString()
-                  .padStart(2, '0')}`;
-              }}
-            />
-            <YAxis stroke="#64748b" fontSize={10} tickLine={false} domain={['auto', 'auto']} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#0f172a',
-                borderColor: '#334155',
-                borderRadius: '8px',
-                fontSize: '11px',
-                color: '#f8fafc',
-              }}
-              labelFormatter={(ts) => new Date(Number(ts)).toLocaleTimeString()}
-              formatter={(val: any, name: any) => [
-                `${Number(val).toLocaleString()} ${yUnit}`,
-                String(name),
-              ]}
-            />
-
-            {/* Threshold Line */}
-            {threshold !== undefined && threshold !== null && (
-              <ReferenceLine
-                y={threshold}
-                stroke="#ef4444"
-                strokeDasharray="4 4"
-                strokeWidth={1.5}
-                label={{
-                  value: `ALERT: ${threshold} ${yUnit}`,
-                  fill: '#ef4444',
-                  fontSize: 10,
-                  position: 'insideTopRight',
-                }}
-              />
-            )}
-
-            {/* Previous Period Comparison Lines (dashed) */}
-            {isCompareActive &&
-              series.map((s) => (
-                <Line
-                  key={`${s.key}_prev`}
-                  type="monotone"
-                  dataKey={`${s.key}_prev`}
-                  name={`${s.name} (Prev)`}
-                  stroke={s.color}
-                  strokeDasharray="4 4"
-                  strokeOpacity={0.4}
-                  strokeWidth={1.5}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              ))}
-
-            {/* Active Primary Lines */}
-            {series.map((s) => (
-              <Line
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                name={s.name}
-                stroke={s.color}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Legend below */}
-      <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-slate-400">
-        {series.map((s) => (
-          <div key={s.key} className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-            <span>{s.name}</span>
-          </div>
-        ))}
-        {isCompareActive && (
-          <div className="flex items-center gap-1.5 text-slate-500">
-            <span className="w-3 border-t-2 border-dashed border-slate-500" />
-            <span>Previous Period</span>
-          </div>
-        )}
+  return <section aria-labelledby={`metric-${id}`} data-testid={`metric-${id}`} className="relative flex min-w-0 flex-col rounded-xl border border-slate-800 bg-slate-900 p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 flex-1"><h2 id={`metric-${id}`} className="text-sm font-semibold text-slate-100">{title}</h2>{description && <p className="mt-1 text-xs leading-relaxed text-slate-400">{description}</p>}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span data-testid="metric-value" className="font-mono text-base font-bold text-slate-100">{currentValue}</span>
+        <button aria-label={`Set threshold for ${title}`} title="Set a local chart threshold" disabled={!hasData} onClick={() => { setThresholdInput(threshold === undefined ? '' : String(threshold)); setShowThreshold(value => !value); }} className="studio-icon-button disabled:opacity-40">{threshold === undefined ? <Bell size={15} /> : <BellRing size={15} />}</button>
+        <button aria-label={`Download ${title} CSV`} title="Download CSV" disabled={!hasData} onClick={exportCsv} className="studio-icon-button disabled:opacity-40"><Download size={15} /></button>
       </div>
     </div>
-  );
+    {threshold !== undefined && <p className={`mt-2 text-xs ${breached ? 'text-amber-400' : 'text-slate-400'}`} role="status">{breached ? 'Threshold crossed' : 'Threshold'}: {id === 'hitrate' ? 'below' : 'above'} {threshold} {yUnit}</p>}
+    {showThreshold && <div role="dialog" aria-label={`Threshold for ${title}`} className="mt-3 rounded-lg border border-slate-700 bg-slate-800 p-3">
+      <div className="flex items-center justify-between gap-3"><span className="text-xs font-semibold">Local chart threshold</span><button aria-label="Close threshold settings" onClick={() => setShowThreshold(false)}><X size={15} /></button></div>
+      <p className="my-2 text-xs text-slate-400">Highlights when the first series goes {id === 'hitrate' ? 'below' : 'above'} this value. Saved in this browser; notifications are not sent.</p>
+      <form onSubmit={save} className="flex flex-wrap items-center gap-2">
+        <label className="text-xs">Threshold ({yUnit})<input aria-label={`Threshold (${yUnit})`} type="number" required min="0" step="any" value={thresholdInput} onChange={event => setThresholdInput(event.target.value)} className="ml-2 w-28 rounded border border-slate-600 bg-slate-900 px-2 py-1" autoFocus /></label>
+        <button type="submit" className="studio-secondary"><Check size={14} />Save</button>
+        {threshold !== undefined && <button type="button" className="studio-secondary" onClick={() => { onSaveThreshold?.(thresholdKey, null); setShowThreshold(false); }}>Clear threshold</button>}
+      </form>
+    </div>}
+    {hasData ? <div ref={plot} className="mt-3 h-48 min-w-0 w-full" aria-label={`${title} chart`}>
+      {renderPlot && <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <LineChart data={mergedData} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+          <XAxis dataKey="timestamp" type="number" scale="time" domain={TIME_DOMAIN} stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={formatMetricTime} minTickGap={30} />
+          <YAxis width={55} stroke="#94a3b8" fontSize={10} tickLine={false} domain={id === 'hitrate' ? PERCENT_DOMAIN : AUTO_DOMAIN} tickFormatter={formatMetricAxis} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={value => formatMetricTime(Number(value))} formatter={(value: any, name: any) => [`${formatMetricTooltip(Number(value))} ${yUnit}`, String(name)]} />
+          {threshold !== undefined && <ReferenceLine y={threshold} ifOverflow="extendDomain" stroke="#f59e0b" strokeDasharray="4 4" />}
+          {isCompareActive && series.map(item => <Line key={`${item.key}-previous`} dataKey={`${item.key}_prev`} name={`${item.name} (previous)`} stroke={item.color} strokeDasharray="4 4" strokeOpacity={0.5} strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />)}
+          {series.map(item => <Line key={item.key} dataKey={item.key} name={item.name} stroke={item.color} strokeWidth={2} dot={data.length < 3 ? { r: 3 } : false} connectNulls={isCompareActive} isAnimationActive={false} />)}
+        </LineChart>
+      </ResponsiveContainer>}
+    </div> : <div className="mt-3 flex min-h-48 items-center justify-center rounded-lg border border-dashed border-slate-700 px-5 text-center text-sm text-slate-400" role="status">{data.length ? emptyMessage || 'This measurement is not reported by the connected engine.' : 'Waiting for recorded samples. Keep the engine and gateway running.'}</div>}
+    <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">{hasData && series.map(item => <span key={item.key} className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</span>)}{isCompareActive && hasData && <span>Dashed: previous period</span>}</div>
+  </section>;
 };
+
+export const ChartCard = React.memo(ChartCardComponent);

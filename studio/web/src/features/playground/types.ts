@@ -91,6 +91,7 @@ export interface PlaygroundInspectResponse {
   structure?: PlaygroundStructure;
   encodingAvailable: boolean;
   sandboxDb: number;
+  valuePreview?: unknown;
 }
 
 export interface PlaygroundLesson {

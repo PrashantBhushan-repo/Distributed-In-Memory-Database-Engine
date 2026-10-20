@@ -34,10 +34,12 @@ class AofManager {
     void set_policy(FsyncPolicy p) noexcept { policy_ = p; }
 
     // Appends a mutating command to the AOF log
-    void append_command(std::size_t db_idx, const std::vector<std::string> &args);
+    bool append_command(std::size_t db_idx, const std::vector<std::string> &args);
 
     // Forces OS buffer flush and fsync
-    void flush_and_fsync();
+    bool flush_and_fsync();
+    [[nodiscard]] bool healthy() const noexcept { return healthy_; }
+    bool install_rewrite(const std::string &temporary_path);
 
     // Compacts AOF log by dumping current keyspace state into target_filepath
     bool rewrite(const db::Keyspace &keyspace, const std::string &target_filepath);
@@ -48,10 +50,11 @@ class AofManager {
 
   private:
     std::string filepath_;
-    std::ofstream out_;
+    int fd_{-1};
+    bool healthy_{true};
     FsyncPolicy policy_{FsyncPolicy::EverySec};
     bool is_open_{false};
-    std::size_t current_db_{0};
+    std::size_t current_db_{db::Keyspace::NUM_DATABASES};
 
     // AOF rewrite buffering
     bool is_rewriting_{false};

@@ -1,3 +1,5 @@
+> Audit boundary: replication is between RedisX instances using the RedisX snapshot format, not Redis RDB interoperability. The server produces canonical effects after successful mutations; `ReplStream` transports those effects without reparsing expiry arguments. Only implemented commands are supported. `WAIT` parks the requesting connection while the event loop continues serving ACKs and other clients. TLS/authentication for the upstream replica link and automatic failover are not implemented. See [engine-audit.md](engine-audit.md).
+
 # RedisX Replication Architecture
 
 This document details the replication architecture of **RedisX** (Stage 8), covering asynchronous primary-to-replica streaming, deterministic command rewriting, the circular backlog buffer, partial resynchronization (PSYNC), and replica state handshakes.
@@ -10,7 +12,7 @@ RedisX implements asynchronous single-primary multi-replica replication compatib
 
 ### Core Properties
 * **Asynchronous Streaming**: The primary executes write commands and streams them to connected replicas with non-blocking write buffering.
-* **Deterministic Execution Effect**: Commands that depend on non-deterministic server state (such as `EXPIRE`, `SETEX`, `SPOP`, `INCRBYFLOAT`) are transformed into deterministic execution effects before propagation.
+* **Deterministic Execution Effect**: Implemented expiry and blocking-pop operations are transformed into deterministic execution effects before propagation.
 * **Partial Resynchronization (`PSYNC`)**: Interrupted replication links resume streaming from a circular memory backlog buffer without executing a costly full keyspace snapshot (`FULLRESYNC`) whenever possible.
 * **Read-Only Replicas**: Replicas reject client mutation requests and delegate expiration deletions strictly to primary-propagated explicit `DEL` commands.
 
@@ -45,9 +47,7 @@ To guarantee strict state equality between primary and replica keyspaces, non-de
 | Original Client Command | Rewritten Outbound Propagation Stream |
 | :--- | :--- |
 | `EXPIRE key 10` | `PEXPIREAT key <current_time_ms + 10000>` |
-| `SETEX key 10 val` | `SET key val` followed by `PEXPIREAT key <current_time_ms + 10000>` |
-| `INCRBYFLOAT key 2.5` | `SET key <computed_exact_float_string>` |
-| `SPOP key` | `SREM key <popped_member_string>` |
+| `SET key val PX 10000` | `SET key val` followed by `PEXPIREAT key <stored Unix expiry>` |
 | Lazy/Active Key Expiry | Explicit synthetic `DEL key` |
 
 ---

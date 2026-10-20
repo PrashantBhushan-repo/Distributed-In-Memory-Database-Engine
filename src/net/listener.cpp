@@ -44,6 +44,7 @@ static inline int sock_accept(int fd, struct sockaddr *addr, socklen_t *len) {
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -85,7 +86,7 @@ core::Result<void> Listener::start() {
     }
 
     set_reuse_addr(listen_fd_, true);
-    set_reuse_port(listen_fd_, true);
+
     set_nonblocking(listen_fd_);
 
     struct sockaddr_in addr {};
@@ -106,7 +107,10 @@ core::Result<void> Listener::start() {
         return core::ErrorCode::SystemError;
     }
 
-    if (sock_listen(listen_fd_, SOMAXCONN) < 0) {
+    socklen_t address_length = sizeof(addr);
+    if (::getsockname(listen_fd_, reinterpret_cast<sockaddr *>(&addr), &address_length) == 0) port_ = ntohs(addr.sin_port);
+
+    if (sock_listen(listen_fd_, backlog_) < 0) {
         REDISX_LOG_ERROR("Failed to listen on socket: %s", std::strerror(errno));
         sock_close(listen_fd_);
         listen_fd_ = -1;
@@ -152,6 +156,9 @@ void Listener::handle_accept() {
             break;
         }
 
+        set_nonblocking(client_fd);
+        net::set_keepalive(client_fd, keepalive_ != 0);
+        if (keepalive_ > 0) ::setsockopt(client_fd, IPPROTO_TCP, TCP_KEEPIDLE, &keepalive_, sizeof(keepalive_));
         accepts_this_tick++;
 
         // Enforce max_clients limit
@@ -174,6 +181,7 @@ void Listener::handle_accept() {
                 }
             });
 
+        if (tls_context_) conn->set_transport(std::make_unique<security::TlsTransport>(client_fd, tls_context_));
         connections_[client_fd] = conn;
         if (on_new_connection_) {
             on_new_connection_(conn);

@@ -13,7 +13,11 @@ export interface MetricSample {
   expiredKeysPerSec: number;
   networkInputBytesPerSec: number;
   networkOutputBytesPerSec: number;
-  p99LatencyMs: number;
+  networkAvailable?: boolean;
+  networkScope?: 'engine' | 'gateway';
+  p99LatencyMs: number | null;
+  infoLatencyMs?: number;
+  replicationOffsetBytes?: number;
   p50LatencyMs?: number;
   p90LatencyMs?: number;
   opsByCommand?: Record<string, number>;

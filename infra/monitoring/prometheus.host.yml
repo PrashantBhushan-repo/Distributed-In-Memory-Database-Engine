@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+  scrape_timeout: 3s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # The engine runs natively/under WSL, outside the Docker network.
+  - job_name: redisx
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['host.docker.internal:9121']
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

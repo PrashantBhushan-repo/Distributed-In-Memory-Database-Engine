@@ -175,7 +175,8 @@ export const MonitorPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6.5rem)] space-y-3">
+    <div className="flex flex-col h-[calc(100dvh-12rem)] min-h-[32rem] space-y-3">
+      <div className="studio-feature-heading"><h1>Live Monitor</h1><p>Inspect commands received by the engine.</p></div>
       {/* 1. Performance Warning Banner */}
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between text-amber-300 text-xs">
         <div className="flex items-center gap-2.5">

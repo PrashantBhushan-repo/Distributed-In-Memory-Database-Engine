@@ -1,0 +1,37 @@
+Recorded engine audit: 19 October 2026
+Log summaries checked: 20 October 2026
+These archived runs were not repeated for the README rewrite.
+
+GCC Debug
+Source: build/codex-debug/gcc-tests-complete.log
+94/94 Test #94: ServerAudit .................................................................   Passed    5.02 sec
+
+100% tests passed, 0 tests failed out of 94
+
+Total Test time (real) =  12.63 sec
+
+Clang ASan + UBSan
+Source: build/codex-debug/asan-tests-complete.log
+94/94 Test #94: ServerAudit .................................................................   Passed    5.96 sec
+
+100% tests passed, 0 tests failed out of 94
+
+Total Test time (real) =  17.86 sec
+
+Clang TSan
+Source: build/codex-debug/tsan-tests-complete.log
+94/94 Test #94: ServerAudit .................................................................   Passed    6.03 sec
+
+100% tests passed, 0 tests failed out of 94
+
+Total Test time (real) =  17.89 sec
+
+RESP fuzz run
+Source: build/codex-debug/fuzz.log
+Done 419081 runs in 301 second(s)
+
+Real client checks
+Source: build/codex-debug/real-clients.log
+PASS redis-py 8.1.0: binary strings, collections, transactions, WATCH, client metadata
+PASS redis-cli PING and --pipe: 1,000 actual pipelined writes
+PASS redis-benchmark SET/GET smoke (results are not a performance certification)

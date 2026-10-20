@@ -59,6 +59,7 @@ class Skiplist {
     [[nodiscard]] size_t count_in_range(double min_score, double max_score,
                                         bool min_inclusive = true, bool max_inclusive = true) const;
 
+    [[nodiscard]] size_t memory_usage() const;
     [[nodiscard]] size_t size() const noexcept { return length_; }
     [[nodiscard]] bool empty() const noexcept { return length_ == 0; }
 

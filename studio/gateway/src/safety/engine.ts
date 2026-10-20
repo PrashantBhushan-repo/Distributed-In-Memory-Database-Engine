@@ -2,7 +2,7 @@ import { UserRole, AuditEntry, CommandExecutionResult, RespKind } from '../types
 
 const DANGEROUS_COMMANDS = new Set([
   'KEYS', 'FLUSHALL', 'FLUSHDB', 'DEBUG', 'SHUTDOWN',
-  'CONFIG', 'REPLICAOF', 'SLAVEOF', 'BGSAVE', 'SAVE'
+  'CONFIG', 'REPLICAOF', 'SLAVEOF', 'BGSAVE', 'SAVE', 'EVAL', 'EVALSHA', 'SCRIPT', 'FUNCTION', 'FCALL', 'MODULE', 'ACL'
 ]);
 
 const READ_ONLY_COMMANDS = new Set([
@@ -23,6 +23,12 @@ export class SafetyEngine {
     unlocked = false
   ): { allowed: boolean; reason?: string } {
     const cmdUpper = command.toUpperCase();
+    if (['SELECT', 'AUTH', 'HELLO', 'QUIT', 'MULTI', 'EXEC', 'DISCARD', 'WATCH', 'UNWATCH', 'SUBSCRIBE', 'PSUBSCRIBE', 'MONITOR', 'CLIENT', 'RESET'].includes(cmdUpper)) {
+      return { allowed: false, reason: `Command '${cmdUpper}' changes connection state. Use the dedicated Studio controls so other requests keep their connection state.` };
+    }
+    if (cmdUpper === 'SLOWLOG' && !['GET', 'LEN'].includes((args[1] ?? '').toUpperCase()) && role !== 'admin') {
+      return { allowed: false, reason: 'Changing the slow log requires an Administrator account.' };
+    }
 
     // 1. Dangerous command check
     if (DANGEROUS_COMMANDS.has(cmdUpper)) {
@@ -102,7 +108,7 @@ export class SafetyEngine {
       if (
         cmdUpper === 'CONFIG' &&
         args[1]?.toLowerCase() === 'set' &&
-        args[2]?.toLowerCase() === 'requirepass' &&
+        /pass|secret|token/i.test(args[2] ?? '') &&
         idx >= 3
       ) {
         return '******';

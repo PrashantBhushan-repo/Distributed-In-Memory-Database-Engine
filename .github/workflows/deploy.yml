@@ -2,148 +2,148 @@ name: CI/CD - Build & Deploy to AWS EC2
 
 on:
   push:
-    branches:
-      - main
-      - feature/packaging-and-docs
-      - feature/redis-studio
+    branches: [main, feature/packaging-and-docs, feature/redis-studio]
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to deploy'
+        description: Branch or commit to deploy
         required: false
-        default: 'main'
+        default: main
 
 permissions:
   contents: read
   packages: write
 
+# All deployment branches share one host. Do not cancel a database deployment.
+concurrency:
+  group: ec2-production
+  cancel-in-progress: false
+
 env:
-  REGISTRY: ghcr.io
   IMAGE_OWNER: prashantbhushan-repo
 
 jobs:
-  # ============================================================================
-  # 1. CI Quality Gate: Run Automated Tests First (Never deploy broken code!)
-  # ============================================================================
   test:
-    name: Run Automated Tests & Quality Gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install C++ Build Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++-12
-
-      - name: Configure CMake (Debug)
-        run: cmake --preset debug
-
-      - name: Build Engine & Test Suite
-        run: cmake --build --preset debug
-
-      - name: Run C++ Unit Tests
-        run: ctest --preset debug --output-on-failure --timeout 30
-
-  # ============================================================================
-  # 2. CI: Build Docker Images on GitHub Actions & Push to GHCR (Runs ONLY if tests pass!)
-  # ============================================================================
-  build-and-push:
-    name: Build & Push Images (GHCR)
-    needs: test
+    name: Resolve release and run quality gates
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.sha }}
+      - id: revision
+        name: Resolve exact source revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build and test applications
+        run: |
+          npm ci --prefix studio/gateway
+          npm ci --prefix studio/web
+          npm run build
+          npm test
+      - name: Install engine dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++-12 libssl-dev openssl python3 shellcheck
+      - run: cmake --preset debug
+      - run: cmake --build --preset debug
+      - run: ctest --preset debug --output-on-failure --timeout 30
+      - name: Check deployment shell scripts
+        run: |
+          bash -n infra/scripts/deploy-ec2.sh
+          bash -n infra/scripts/prepare-storage.sh
+          bash -n infra/scripts/inspect-ec2.sh
+          bash -n infra/scripts/wait-http.sh
+          bash -n tests/scripts/test_deployment.sh
+          shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh infra/scripts/wait-http.sh tests/scripts/test_deployment.sh
+          python3 tests/scripts/test_deploy_orchestration.py
+          python3 tests/scripts/test_http_readiness.py
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry (GHCR)
-        uses: docker/login-action@v3
+  build-and-push:
+    name: Build immutable images and test persistence
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      engine: ${{ steps.engine.outputs.digest }}
+      gateway: ${{ steps.gateway.outputs.digest }}
+      web: ${{ steps.web.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.test.outputs.revision }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      # 1. Build C++ Engine
-      - name: Build & Push RedisX C++ Engine
-      # 1. Build C++ Engine
+      - name: Build engine
+        id: engine
         uses: docker/build-push-action@v5
         with:
           context: .
           file: infra/docker/Dockerfile.engine
           push: true
-          tags: |
-            ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-engine:latest
-            ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-engine:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # 2. Build Fastify API Gateway
-      - name: Build & Push Fastify API Gateway
+          tags: ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-engine:${{ needs.test.outputs.revision }}
+          cache-from: type=gha,scope=engine
+          cache-to: type=gha,mode=max,scope=engine
+      - name: Build gateway
+        id: gateway
         uses: docker/build-push-action@v5
         with:
           context: .
           file: infra/docker/Dockerfile.gateway
           push: true
-          tags: |
-            ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-gateway:latest
-            ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-gateway:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # 3. Build React Studio Web UI
-      - name: Build & Push React Studio Web UI
+          tags: ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-gateway:${{ needs.test.outputs.revision }}
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
+      - name: Build web
+        id: web
         uses: docker/build-push-action@v5
         with:
           context: .
           file: infra/docker/Dockerfile.web
           push: true
-          tags: |
-            ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-web:latest
-            ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-web:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-web:${{ needs.test.outputs.revision }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Verify bind-mount permissions and restart durability
+        env:
+          ENGINE_IMAGE: ghcr.io/${{ env.IMAGE_OWNER }}/pbredisdb-engine@${{ steps.engine.outputs.digest }}
+        run: bash tests/scripts/test_deployment.sh
 
-  # ============================================================================
-  # 3. CD: SSH to EC2, Pull Pre-Built Images & Run with Docker Compose
-  # ============================================================================
   deploy:
-    name: Deploy to EC2
-    needs: build-and-push
+    name: Deploy and verify EC2
+    needs: [test, build-and-push]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Create Remote App Directory on EC2
-        uses: appleboy/ssh-action@v1.0.3
+      - uses: actions/checkout@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          script: mkdir -p /home/${{ secrets.EC2_USER }}/pbRedisDB
-
-      - name: Copy Deployment Configs to EC2 (Zero Source Code)
+          ref: ${{ needs.test.outputs.revision }}
+      - name: Prepare immutable release manifest
+        env:
+          ENGINE_DIGEST: ${{ needs.build-and-push.outputs.engine }}
+          GATEWAY_DIGEST: ${{ needs.build-and-push.outputs.gateway }}
+          WEB_DIGEST: ${{ needs.build-and-push.outputs.web }}
+        run: |
+          printf 'ENGINE_IMAGE=ghcr.io/%s/pbredisdb-engine@%s\nGATEWAY_IMAGE=ghcr.io/%s/pbredisdb-gateway@%s\nWEB_IMAGE=ghcr.io/%s/pbredisdb-web@%s\n' \
+            "$IMAGE_OWNER" "$ENGINE_DIGEST" "$IMAGE_OWNER" "$GATEWAY_DIGEST" "$IMAGE_OWNER" "$WEB_DIGEST" > images.env
+      - name: Upload versioned runtime files
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          source: "docker-compose.prod.yml,infra/monitoring,infra/scripts"
-          target: "/home/${{ secrets.EC2_USER }}/pbRedisDB"
-
-      - name: Deploy Containers on EC2 via SSH
+          source: docker-compose.prod.yml,.env.production,images.env,infra/configs,infra/monitoring,infra/scripts
+          target: /home/${{ secrets.EC2_USER }}/pbRedisDB/.deploy/releases/${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Prepare host, deploy and verify
         uses: appleboy/ssh-action@v1.0.3
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -154,30 +154,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           envs: GH_TOKEN,GH_ACTOR
+          command_timeout: 18m
           script_stop: true
           script: |
-            echo "=========================================================="
-            echo "🚀 Starting Deployment on AWS EC2 (Zero Source Code Mode)"
-            echo "=========================================================="
-
-            cd "/home/${{ secrets.EC2_USER }}/pbRedisDB"
-
-            echo "==> Authenticating Docker with GitHub Container Registry..."
-            echo "${GH_TOKEN}" | docker login ghcr.io -u "${GH_ACTOR}" --password-stdin
-
-            echo "==> Pulling pre-built images from GitHub Container Registry..."
-            docker compose -f docker-compose.prod.yml pull
-
-            echo "==> Launching full production stack (Zero compile overhead on EC2)..."
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-
-            echo "==> Waiting for container startup & healthchecks..."
-            sleep 8
-            docker compose -f docker-compose.prod.yml ps
-
-            echo "==> Pruning dangling image layers to conserve disk space..."
-            docker image prune -f
-
-            echo "=========================================================="
-            echo "✅ Deployment completed successfully in seconds!"
-            echo "=========================================================="
+            set -eu
+            export APP_ROOT="/home/${{ secrets.EC2_USER }}/pbRedisDB"
+            bash "$APP_ROOT/.deploy/releases/${{ github.run_id }}-${{ github.run_attempt }}/infra/scripts/deploy-ec2.sh"

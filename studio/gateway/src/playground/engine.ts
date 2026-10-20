@@ -1,3 +1,4 @@
+import { parseCommandLine } from '../../../../packages/shared/command-parser.mjs';
 import {
   PlaygroundDataType,
   PlaygroundEncoding,
@@ -71,47 +72,7 @@ export class PlaygroundEngine {
   }
 
   // Parses command line string like redis-cli (handles "quotes", 'quotes', escapes)
-  public parseCommandTokens(commandLine: string): string[] {
-    const tokens: string[] = [];
-    let current = '';
-    let inDouble = false;
-    let inSingle = false;
-
-    for (let i = 0; i < commandLine.length; i++) {
-      const char = commandLine[i];
-
-      if (char === '\\' && inDouble && i + 1 < commandLine.length) {
-        current += commandLine[++i];
-        continue;
-      }
-
-      if (char === '"' && !inSingle) {
-        inDouble = !inDouble;
-        continue;
-      }
-
-      if (char === "'" && !inDouble) {
-        inSingle = !inSingle;
-        continue;
-      }
-
-      if (/\s/.test(char) && !inDouble && !inSingle) {
-        if (current.length > 0) {
-          tokens.push(current);
-          current = '';
-        }
-        continue;
-      }
-
-      current += char;
-    }
-
-    if (current.length > 0) {
-      tokens.push(current);
-    }
-
-    return tokens;
-  }
+  public parseCommandTokens(commandLine: string): string[] { return parseCommandLine(commandLine); }
 
   // Extracts key arguments and verifies all keys start with "play:"
   public extractAndValidateKeys(tokens: string[]): string[] {

@@ -1,0 +1,20 @@
+[
+  {
+    "seconds": 0,
+    "heapMB": 35.1,
+    "rendererPrivateMB": 186,
+    "nodes": 2588,
+    "listeners": 4918,
+    "charts": 7,
+    "status": "Waiting for live readings · 202 samples · Updated 04:08:52"
+  },
+  {
+    "seconds": 10,
+    "heapMB": 58.5,
+    "rendererPrivateMB": 1601,
+    "nodes": 4723,
+    "listeners": 5468,
+    "charts": 7,
+    "status": "Live · 213 samples · Updated 04:09:03"
+  }
+]

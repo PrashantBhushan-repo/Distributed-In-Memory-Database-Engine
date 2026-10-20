@@ -1,6 +1,8 @@
 #include "redisx/db/keyspace.h"
 
 #include <stdexcept>
+#include "redisx/core/time.h"
+#include "redisx/memory/lfu.h"
 
 namespace redisx::db {
 
@@ -23,10 +25,20 @@ bool Keyspace::db_set(std::size_t db_idx, std::string key, Value val, std::uint6
 }
 
 Entry *Keyspace::db_get(std::size_t db_idx, std::string_view key) {
-    return get_db(db_idx).find(key);
+    if (expiration_check_ && expiration_check_(db_idx, key)) return nullptr;
+    auto *entry = get_db(db_idx).find(key);
+    if (entry) {
+        const auto now = static_cast<std::uint32_t>((core::monotonic_now_ms() / 1000) & 0xffffff);
+        const auto minutes = static_cast<std::uint32_t>((core::monotonic_now_ms() / 60000) & 0xffff);
+        entry->lru_clock = now;
+        entry->lfu_freq = memory::lfu_log_incr(memory::lfu_decay_counter(entry->lfu_freq, entry->lfu_last_decay, minutes));
+        entry->lfu_last_decay = minutes;
+    }
+    return entry;
 }
 
 const Entry *Keyspace::db_get(std::size_t db_idx, std::string_view key) const {
+    if (expiration_check_ && expiration_check_(db_idx, key)) return nullptr;
     return get_db(db_idx).find(key);
 }
 
@@ -35,7 +47,7 @@ bool Keyspace::db_delete(std::size_t db_idx, std::string_view key) {
 }
 
 bool Keyspace::db_exists(std::size_t db_idx, std::string_view key) const {
-    return get_db(db_idx).contains(key);
+    return db_get(db_idx, key) != nullptr;
 }
 
 std::size_t Keyspace::db_size(std::size_t db_idx) const {

@@ -1,0 +1,6 @@
+.prerender/
+playwright-report/
+test-results/
+.lighthouseci/
+artifacts/
+test-results-metrics-memory/

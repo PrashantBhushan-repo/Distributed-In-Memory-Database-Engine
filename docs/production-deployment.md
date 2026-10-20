@@ -1,103 +1,127 @@
-# Enterprise Production Deployment Guide
+# EC2 production deployment
 
-This guide describes how to deploy the entire **pbRedisDB** full-stack suite (C++20 RedisX Engine, Fastify API Gateway, React 18 Studio Web Visualizer, Prometheus, and Grafana) to an AWS EC2 instance using a **Zero-Source-Code** Continuous Deployment (CD) pipeline.
+Normal deployments run entirely through `.github/workflows/deploy.yml`. No
+ownership fixes, configuration edits, persistence cleanup or container commands
+should be necessary over SSH. Existing database files are never deleted.
 
----
+## Prerequisites
 
-## 🏛️ Deployment Architecture
+- An Ubuntu EC2 instance reachable over SSH from the Actions runner.
+- An SSH user with noninteractive sudo (the normal Ubuntu EC2 user supports this).
+- Repository Actions secrets `EC2_HOST`, `EC2_USER`, and `EC2_SSH_KEY`.
+- Correct production settings in `.env.production`. This file is currently
+  repository-managed; do not put new production secrets in source control.
+- Enough disk space for images and three local, uncompressed database backups,
+  plus the next backup. A single deployment requires dataset size plus at least
+  64 MiB free for its backup before the current engine is stopped.
 
+Existing DNS, security groups and host HTTPS configuration remain prerequisites;
+this pipeline does not create AWS infrastructure or configure a domain. Docker
+and the Compose plugin are installed automatically if missing. The temporary
+registry credential is removed when the deployment exits.
+
+## Deploy
+
+Push to `main`, `feature/packaging-and-docs`, or `feature/redis-studio`, or run the
+workflow manually with a branch/commit. These branches share the existing EC2
+environment. Actions serializes runs and never cancels a deployment mid-flight.
+The selected ref is resolved once and all subsequent jobs use that exact commit.
+
+The pipeline:
+
+1. Builds/tests the gateway, web application and C++ engine; lints deployment
+   scripts and tests deployment failure handling.
+2. Builds three application images tagged with the resolved commit. Deployment
+   uses their immutable registry digests, not `latest`.
+3. Runs a container test against the actual engine image: initialize root-owned
+   storage twice, retain existing contents, write a key, restart and recover it.
+4. Uploads a complete runtime bundle into a unique release directory.
+5. Acquires a host lock, installs Docker if necessary, inventories existing
+   containers, project labels, volumes, published ports and disk usage; validates
+   Compose and pulls images before interrupting existing services.
+6. Detects the image's actual non-root UID/GID, repairs host data permissions
+   without following symlinks, and tests writing as the normal engine user.
+7. Checks backup space, stops the existing engine and takes a consistent local
+   backup. If backup fails, restarts that same existing container and fails CI.
+8. Recreates services (including config-only changes), waits up to 180 seconds
+   for Compose readiness, then verifies gateway-to-engine connectivity, web,
+   Prometheus and Grafana HTTP readiness. Each HTTP check names the service and
+   retries startup connection resets and HTTP errors with a 120-second retry
+   budget (at most five seconds per request). Services without container health
+   checks must still pass these HTTP checks; running alone is not readiness.
+9. Records the successful release, retains three completed backups and removes
+   its temporary registry login.
+
+On failure, Actions prints container states, health results, recent logs and disk
+usage, and exits unsuccessfully. Fixes can be deployed by another workflow run.
+This does not attempt destructive recovery of corrupted data or automatically
+downgrade a database binary after it may have changed persistence files.
+
+## EC2 layout and migration from the previous workflow
+
+```text
+/home/<EC2_USER>/pbRedisDB/
+  data/                              # SAME existing live database directory
+  .deploy/
+    deploy.lock
+    releases/<run-id>-<attempt>/
+      docker-compose.prod.yml
+      images.env                     # engine/gateway/web digest references
+      .env.production
+      infra/configs/
+      infra/monitoring/
+      infra/scripts/
+    backups/<run-id>-<attempt>.tar    # consistent pre-deployment dataset
+    current -> releases/...          # latest verified release
+    previous -> releases/...         # prior verified release
 ```
-Developer Workstation (Windows / Linux)
-      │
-      │ git push origin <branch>
-      ▼
-GitHub Actions CI/CD Pipeline
-      ├── 1. Buildx builds & pushes Docker images to GitHub Container Registry (ghcr.io)
-      └── 2. Beams docker-compose.prod.yml + configs via SSH (SCP) to AWS EC2
-               │
-               ▼
-AWS EC2 Production Server (Ubuntu 22.04 / 24.04 LTS)
-      ├── 🛡️ Host Security: 2GB Swap Space (OOM protection)
-      ├── 🔒 Least Privilege: Non-root execution (`node`, `redisx`)
-      ├── 🪵 Disk Protection: Docker log rotation (3x10MB cap per container)
-      └── 🐳 Docker Compose Stack:
-             ├── redisx:6379 (C++20 In-Memory Engine) + :9121 (Prometheus Metrics)
-             ├── gateway:4000 (Fastify TypeScript Safety API)
-             ├── web:3000 (React 18 Studio UI + Nginx API Proxy)
-             ├── prometheus:9090 (Telemetry & Timeseries Metrics)
-             └── grafana:3002 (Observability Dashboards)
-```
 
----
+The Compose project is passed explicitly with `--project-name`, so release folder
+names never create new stacks. Existing application containers are inspected and
+their project is reused (`pbredisdb` is the default on a fresh host). Existing
+Prometheus and Grafana named volume names are also reused explicitly. Runtime
+storage settings are passed through `sudo env`, which normally drops exported
+shell variables. `DATA_DIR` points to the original absolute data directory,
+so introducing release directories does not start an empty database. Old files in
+the application root are no longer used for new releases. Do not edit EC2 copies;
+update repository configuration and run the workflow.
 
-## 🛡️ Production Hardening Features
+Unknown container ownership, mixed projects, a different existing engine data
+mount, or an unrelated Docker container publishing a required port fail preflight
+before stopping the database. No unknown containers or volumes are removed.
+The Actions log provides the EC2 inventory automatically; a separate manual SSH
+inspection is not required for each deployment. Cached images and unused networks
+from previous failed deployments are not themselves container-name conflicts.
+No blanket Docker pruning is performed.
 
-1. **Zero Plain-Text Source Code on Server**:
-   Only pre-built container images and runtime configuration files exist on EC2. Proprietary C++ and TypeScript source code is never exposed on the virtual machine.
-2. **Container Log Rotation**:
-   All services utilize Docker's `json-file` logging driver with `max-size: "10m"` and `max-file: "3"`, guaranteeing that logs cannot exceed 30MB per container and crash the server with "Disk Full" errors.
-3. **Non-Root Execution**:
-   - `redisx` runs as user `redisx` (UID 999).
-   - `gateway` runs as user `node` (UID 1000).
-   This enforces the principle of least privilege and prevents container breakouts.
-4. **2GB Swap Memory**:
-   `infra/scripts/setup-ec2.sh` automatically provisions and mounts a 2GB persistent swapfile, preventing the Linux kernel OOM (Out-Of-Memory) killer from terminating database processes during traffic spikes.
-5. **SSL/TLS & Domain Reverse Proxy**:
-   `infra/scripts/setup-ssl.sh` enables one-command Let's Encrypt certificate issuance and automatic HTTPS redirect.
+The engine's numeric user and group are discovered from its image. The deployment
+fixes existing root/SSH-user-owned persistence automatically; Dockerfile ownership
+alone cannot fix a bind-mounted host directory.
 
----
+## Operational limits
 
-## 🚀 One-Time EC2 Server Provisioning
+Single-instance engine replacement has a brief interruption; this is not a
+high-availability or zero-downtime deployment. Genuine corruption, incompatible
+data formats, disk exhaustion or failed hardware require an explicit recovery
+decision. Local backups protect against deployment mistakes but not loss of the
+instance/storage: add off-instance backups with restore drills for disaster
+recovery. Release bundles and old application images are retained for diagnosis;
+monitor disk capacity and establish a retention policy as usage grows.
 
-Run this command inside your EC2 terminal (or EC2 Instance Connect):
+Moving credentials to AWS Secrets Manager/Parameter Store and using GitHub OIDC
+with Systems Manager deployment are separate infrastructure improvements. The
+current workflow continues using the existing authorized SSH secrets.
+
+## Validation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/feature/packaging-and-docs/infra/scripts/setup-ec2.sh | bash
+shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh infra/scripts/wait-http.sh tests/scripts/test_deployment.sh
+python3 tests/scripts/test_deploy_orchestration.py
+python3 tests/scripts/test_http_readiness.py
+ENGINE_IMAGE=ghcr.io/<owner>/pbredisdb-engine@sha256:<digest> bash tests/scripts/test_deployment.sh
 ```
 
-### What this script configures:
-- Installs Docker Engine, Docker Buildx, and Docker Compose Plugin.
-- Adds user `ubuntu` to the `docker` group (no `sudo` required for Docker commands).
-- Installs Git and basic utilities (`curl`, `gnupg`, `ca-certificates`).
-- Allocates, formats, and activates a 2GB swap space persisted in `/etc/fstab`.
-
----
-
-## 🔑 GitHub Secrets Configuration
-
-Ensure the following repository secrets are set in **GitHub Settings -> Secrets and variables -> Actions**:
-
-| Secret Name | Value Description | Example |
-| :--- | :--- | :--- |
-| `EC2_HOST` | Your EC2 Elastic Public IP | `13.210.234.73` |
-| `EC2_USER` | SSH Username | `ubuntu` |
-| `EC2_SSH_KEY` | Contents of your `.pem` RSA private key | `-----BEGIN RSA PRIVATE KEY----- ...` |
-
----
-
-## 🔒 Optional: Custom Domain & Free SSL/TLS (HTTPS)
-
-Once a custom domain (e.g., `redis.yourdomain.com`) points to your EC2 Elastic IP:
-
-```bash
-cd /opt/pbredisdb
-sudo ./infra/scripts/setup-ssl.sh redis.yourdomain.com admin@yourdomain.com
-```
-
-This sets up:
-- Host Nginx on ports 80 and 443
-- Automatic HTTP to HTTPS redirection
-- Automated Let's Encrypt certificate renewal via `certbot.timer`
-- WebSocket proxying for real-time telemetry streaming
-
----
-
-## 📊 Accessing Services
-
-| Service | Port / Protocol | URL | Default Credentials |
-| :--- | :--- | :--- | :--- |
-| **Studio Web Visualizer** | `3000 / HTTP` | `http://<EC2_IP>:3000` | N/A |
-| **Grafana Dashboards** | `3002 / HTTP` | `http://<EC2_IP>:3002` | Anonymous Viewer / `admin:admin` |
-| **Fastify API Gateway** | `4000 / HTTP` | `http://<EC2_IP>:4000/health`| N/A |
-| **RedisX Engine** | `6379 / RESP` | `redis-cli -h <EC2_IP> -p 6379` | `AUTH <password>` if enabled |
-| **Prometheus Metrics** | `9090 / HTTP` | `http://<EC2_IP>:9090` | N/A |
+The orchestration tests mock Docker and system services while exercising the real
+deployment script, backups, exit codes, credential cleanup and release pointers.
+The image test requires a running Linux Docker daemon and sudo for disposable
+root-owned test-directory cleanup; Actions provides both.

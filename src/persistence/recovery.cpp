@@ -18,7 +18,7 @@ core::Result<void> RecoveryEngine::recover(
     const RecoveryOptions &opts) {
 
     // Step 1: Load Snapshot (RDB) if present
-    if (!rdb_path.empty() && std::filesystem::exists(rdb_path)) {
+    if (!( !aof_path.empty() && std::filesystem::exists(aof_path)) && !rdb_path.empty() && std::filesystem::exists(rdb_path)) {
         REDISX_LOG_INFO("Loading RDB snapshot from %s", rdb_path.c_str());
         SnapshotReader reader;
         auto res = reader.load_snapshot(keyspace, rdb_path);
@@ -31,6 +31,11 @@ core::Result<void> RecoveryEngine::recover(
     // Step 2: Replay AOF log if present
     if (!aof_path.empty() && std::filesystem::exists(aof_path)) {
         REDISX_LOG_INFO("Replaying AOF log from %s", aof_path.c_str());
+        struct ReplayClock {
+            bool previous = db::TTLManager::loading_aof;
+            ReplayClock() { db::TTLManager::loading_aof = true; }
+            ~ReplayClock() { db::TTLManager::loading_aof = previous; }
+        } replay_clock;
         std::ifstream aof_file(aof_path, std::ios::binary);
         if (!aof_file.is_open()) {
             REDISX_LOG_ERROR("Failed to open AOF file %s", aof_path.c_str());
@@ -39,61 +44,56 @@ core::Result<void> RecoveryEngine::recover(
 
         core::Buffer in_buf;
         std::size_t active_db = 0;
-        std::vector<char> file_chunk(4096);
-        bool parse_error = false;
-
-        while (aof_file.read(file_chunk.data(), static_cast<std::streamsize>(file_chunk.size())) || aof_file.gcount() > 0) {
-            std::size_t bytes_read = static_cast<std::size_t>(aof_file.gcount());
-            in_buf.append(file_chunk.data(), bytes_read);
-
-            while (in_buf.readable_bytes() > 0) {
-                auto result = proto::RespReader::parse(in_buf);
-                if (result.is_error()) {
-                    parse_error = true;
-                    break;
+        std::uintmax_t consumed = 0, durable_end = 0, transaction_start = 0;
+        bool in_transaction = false;
+        std::vector<proto::Command> transaction;
+        const auto apply = [&](const proto::Command &cmd) -> bool {
+            const auto *spec = dispatcher.find_command(cmd.name_upper());
+            if (!spec || (!(spec->flags & commands::CMD_FLAG_WRITE) && cmd.name_upper() != "SELECT")) return false;
+            core::Buffer reply;
+            std::size_t out_db = active_db;
+            dispatcher.dispatch(cmd, keyspace, active_db, reply, out_db);
+            if (reply.peek_string_view().starts_with("-")) return false;
+            active_db = out_db;
+            return true;
+        };
+        std::vector<char> chunk(4096);
+        while (aof_file.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) || aof_file.gcount() > 0) {
+            in_buf.append(chunk.data(), static_cast<std::size_t>(aof_file.gcount()));
+            while (in_buf.readable_bytes()) {
+                const auto before = in_buf.readable_bytes();
+                auto parsed = proto::RespReader::parse(in_buf);
+                if (parsed.is_error()) return core::ErrorCode::ProtocolError;
+                if (!parsed.value()) break;
+                auto command = std::move(*parsed.value());
+                const auto start = consumed;
+                consumed += before - in_buf.readable_bytes();
+                const auto name = command.name_upper();
+                if (name == "MULTI" && command.arg_count() == 1 && !in_transaction) {
+                    in_transaction = true; transaction_start = start; transaction.clear();
+                } else if (name == "EXEC" && command.arg_count() == 1 && in_transaction) {
+                    for (const auto &queued : transaction) if (!apply(queued)) return core::ErrorCode::ProtocolError;
+                    transaction.clear(); in_transaction = false; durable_end = consumed;
+                } else if (in_transaction) {
+                    if (name == "MULTI" || name == "EXEC") return core::ErrorCode::ProtocolError;
+                    transaction.push_back(std::move(command));
+                } else {
+                    if (!command.empty() && !apply(command)) return core::ErrorCode::ProtocolError;
+                    durable_end = consumed;
                 }
-
-                if (!result.value().has_value()) {
-                    break; // Incomplete command, wait for more bytes
-                }
-
-                const auto &cmd = result.value().value();
-                if (cmd.empty()) continue;
-
-                std::string name_upper = cmd.name_upper();
-                if (name_upper == "SELECT" && cmd.arg_count() == 2) {
-                    try {
-                        std::size_t db_idx = static_cast<std::size_t>(std::stoul(cmd.arg(1)));
-                        if (db::Keyspace::is_valid_db(db_idx)) {
-                            active_db = db_idx;
-                            continue;
-                        }
-                    } catch (...) {}
-                }
-
-                core::Buffer dummy_out;
-                std::size_t out_db = active_db;
-                dispatcher.dispatch(cmd, keyspace, active_db, dummy_out, out_db);
-                active_db = out_db;
-            }
-
-            if (parse_error) break;
-        }
-
-        if (parse_error) {
-            REDISX_LOG_ERROR("Corrupted AOF command stream in %s", aof_path.c_str());
-            return core::ErrorCode::ProtocolError;
-        }
-
-        if (in_buf.readable_bytes() > 0) {
-            if (opts.aof_load_truncated) {
-                REDISX_LOG_WARN("AOF file ended with truncated final command (%llu unparsed bytes), continuing",
-                                static_cast<unsigned long long>(in_buf.readable_bytes()));
-            } else {
-                REDISX_LOG_ERROR("Unparsed truncated command tail in %s", aof_path.c_str());
-                return core::ErrorCode::ProtocolError;
             }
         }
+        if (aof_file.bad()) return core::ErrorCode::IoError;
+        if (in_buf.readable_bytes() || in_transaction) {
+            if (!opts.aof_load_truncated) return core::ErrorCode::ProtocolError;
+            if (in_transaction) durable_end = transaction_start;
+            aof_file.close();
+            std::error_code error;
+            std::filesystem::resize_file(aof_path, durable_end, error);
+            if (error) return core::ErrorCode::IoError;
+            REDISX_LOG_WARN("Removed an incomplete final AOF command/transaction from %s", aof_path.c_str());
+        }
+
     }
 
     return {};

@@ -8,6 +8,7 @@ interface FragmentationCardProps {
 }
 
 export const FragmentationCard: React.FC<FragmentationCardProps> = ({ ratio, usedMemoryBytes }) => {
+  if (!ratio) return <div className="rounded-xl border border-slate-800 bg-slate-900 p-4"><h2 className="text-sm font-semibold">Memory fragmentation</h2><p className="text-xs text-slate-400 mt-2">This engine does not report resident memory or a fragmentation ratio.</p></div>;
   let status: 'healthy' | 'warning' | 'critical' = 'healthy';
   let badgeText = 'Optimal';
   let interpretation = '1.0 to 1.3 is healthy. Allocator memory matches resident physical memory.';

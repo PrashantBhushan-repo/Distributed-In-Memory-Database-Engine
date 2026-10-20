@@ -154,7 +154,8 @@ export const PubSubPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-6.5rem)] gap-4">
+    <><div className="studio-feature-heading"><h1>Pub/Sub</h1><p>Subscribe to channels and publish messages through the connected engine.</p></div>
+    <div className="flex flex-col lg:flex-row h-[calc(100dvh-15rem)] min-h-[32rem] gap-4">
       {/* LEFT PANE: Active Channels List */}
       <div className="w-full lg:w-72 shrink-0 h-64 lg:h-full">
         <ChannelList
@@ -195,6 +196,6 @@ export const PubSubPage: React.FC = () => {
           />
         </div>
       </div>
-    </div>
+    </div></>
   );
 };

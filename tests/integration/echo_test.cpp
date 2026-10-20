@@ -45,7 +45,9 @@ class EchoServerIntegrationTest : public ::testing::Test {
         });
 
         ASSERT_TRUE(listener_->start().has_value());
+        port_ = listener_->port();
 
+        if (std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()) == "MaxClientsEnforcement") listener_->set_max_clients(5);
         server_thread_ = std::thread([this]() {
             server_loop_->run();
         });
@@ -63,7 +65,7 @@ class EchoServerIntegrationTest : public ::testing::Test {
         listener_->stop();
     }
 
-    std::uint16_t port_{6480};
+    std::uint16_t port_{0};
     std::unique_ptr<EventLoop> server_loop_;
     std::unique_ptr<Listener> listener_;
     std::thread server_thread_;
@@ -135,7 +137,6 @@ TEST_F(EchoServerIntegrationTest, ConcurrentClientsEcho) {
 }
 
 TEST_F(EchoServerIntegrationTest, MaxClientsEnforcement) {
-    listener_->set_max_clients(5);
 
     struct sockaddr_in addr {};
     addr.sin_family = AF_INET;

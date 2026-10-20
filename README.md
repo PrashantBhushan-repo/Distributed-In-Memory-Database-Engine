@@ -1,255 +1,234 @@
-# RedisX (`pbRedisDB`) & RedisX Studio
+# RedisX (pbRedisDB)
 
-> A high-performance, low-latency, event-driven in-memory key-value database engine built from scratch in modern **C++20** featuring a single-threaded `epoll` reactor event loop, full RESP2/RESP3 protocol compliance, master-replica PSYNC replication, dual AOF+RDB persistence, native OpenMetrics telemetry, and **RedisX Studio** — an industrial administrative visualizer, real-time telemetry console, and interactive educational playground.
+A C++20 in-memory database with a browser workspace for inspecting the engine that actually stores your data.
 
-[![Build & Test](https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/actions/workflows/cmake-ci.yml/badge.svg)](https://github.com/PrashantBhushan-repo/Distributed-In-Memory-Database-Engine/actions)
-[![Language](https://img.shields.io/badge/Language-C%2B%2B20-blue.svg)](https://en.cppreference.com/w/cpp/20)
-[![Studio](https://img.shields.io/badge/Studio-React%2018%20%2B%20Fastify-emerald.svg)](https://react.dev/)
-[![Protocol](https://img.shields.io/badge/Protocol-RESP2%2FRESP3-red.svg)](https://redis.io/docs/latest/develop/reference/protocol-spec/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+RedisX speaks RESP2 over TCP and implements strings, hashes, lists, sets, and sorted sets. Studio connects through a Fastify gateway: a key created in the browser can be read by a Redis client against the same C++ process. The project includes expiration, eviction, append-only persistence, snapshots, optional primary/replica replication, and Prometheus metrics.
 
----
+[Architecture](#architecture) · [Run locally](#run-locally) · [Try it](#try-it) · [Monitoring](#monitoring) · [Verification](#verification) · [Limitations](#limitations)
 
-## ⚡ 1-Command Quickstart
+## What is here
 
-### Option 1: Docker Compose (Full Stack in One Command)
-Run the entire production stack (RedisX Engine + Fastify Gateway + React Studio) with automatic container healthchecks:
+- **A working storage engine.** Linux `epoll`, incremental RESP parsing, 16 logical databases, TTL expiration, and LRU/LFU eviction.
+- **An inspectable data path.** Key Explorer, typed editors, a command console, and a playground that executes allowed commands in DB15.
+- **Recoverable local state.** An append-only log and CRC-checked RedisX snapshots, with restart and corruption checks in the engine audit.
+- **Measured observability.** INFO-based Studio readings, an HTTP metrics endpoint, Prometheus collection, and a provisioned Grafana dashboard.
+
+This is a Redis-compatible subset, not a complete Redis implementation. The [compatibility boundaries](#limitations) are part of the project contract.
+
+![Studio connected to the C++ verification engine](docs/images/studio-dashboard.png)
+
+*Studio during local verification with a small test dataset. This screenshot is a functional example, not a throughput benchmark.*
+
+## Architecture
+
+![Hand-drawn architecture showing Studio, the gateway, the C++ command path, persistence, replication, and independent Prometheus/Grafana monitoring](docs/architecture/redisx.svg)
+
+[Open the diagram](docs/architecture/redisx.svg) · [Editable Excalidraw source](docs/architecture/redisx.excalidraw) · [Diagram notes](docs/architecture/README.md)
+
+The main paths have different responsibilities:
+
+1. **Commands:** Studio sends same-origin HTTP requests through the frontend proxy. The gateway validates requests, applies access rules, and sends RESP2 commands through ioredis. Logical databases use separate connections so concurrent requests cannot change each other's selected database.
+2. **Storage:** the C++ reactor reads requests, parses them, and dispatches handlers against the keyspace. Applied mutations feed persistence and the replication stream. Background snapshot saves and AOF rewrites use forked children; `everysec` fsync currently runs on the maintenance tick.
+3. **Telemetry:** Studio samples INFO through the gateway every second. Prometheus independently pulls the engine's HTTP `/metrics` endpoint every five seconds in the supplied local configuration. Grafana queries Prometheus. Changing Studio's connection does not retarget Prometheus.
+
+A shared gateway currently has one configured engine target. The drawing shows the native/WSL engine with monitoring in Docker; the full-container configuration uses Docker service names instead.
+
+## Run locally
+
+The verified development setup runs the C++ engine in Linux or WSL, Studio on the host, and monitoring in Docker Desktop. Native Windows builds of the engine are not supported.
+
+**Requirements:** a C++20 compiler, CMake 3.20+, Ninja, OpenSSL development headers, Node.js/npm, and optionally Docker Desktop. The recent Studio checks used Node.js 24.14.0 and Chrome 155 on Windows; the engine ran under WSL2. GoogleTest is fetched when C++ tests are enabled.
+
+### 1. Start the C++ engine
+
+Run from the repository root in a Linux or WSL terminal:
+
 ```bash
-docker compose up -d
-```
-* **RedisX Studio Web UI**: [http://localhost:3000](http://localhost:3000)
-* **API Gateway & Health**: [http://localhost:4000/health](http://localhost:4000/health)
-* **C++ Redis Engine**: `localhost:6379` (RESP2/RESP3)
+sudo apt-get update
+sudo apt-get install -y build-essential cmake ninja-build libssl-dev openssl python3
 
-### Option 2: Local Developer Mode (Instant Demo Mode — Zero Setup)
-Run RedisX Studio in pure browser & gateway simulation mode without needing an active C++ Redis daemon:
+cmake -S . -B build/local -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DREDISX_BUILD_TESTS=OFF \
+  -DREDISX_BUILD_BENCHMARKS=OFF
+cmake --build build/local --parallel 2
+
+mkdir -p data/local
+./build/local/redisx \
+  --bind 127.0.0.1 \
+  --port 6379 \
+  --metrics-port 9121 \
+  --dir ./data/local \
+  --appendonly yes
+```
+
+If an engine already owns port 6379, use that process or choose another port and set Studio's `REDIS_PORT` accordingly. Use a fresh build directory after moving the checkout; old CMake caches can contain absolute paths.
+
+### 2. Start Studio
+
+In PowerShell, from the same repository root:
+
+```powershell
+npm ci --prefix studio/gateway
+npm ci --prefix studio/web
+
+$env:NODE_ENV = 'development'
+$env:HOST = '127.0.0.1'
+$env:STUDIO_PLAYGROUND = 'true'
+$env:REDIS_HOST = '127.0.0.1'
+$env:REDIS_PORT = '6379'
+$env:DEMO_MODE = 'false'
+$env:DEMO_FALLBACK = 'false'
+
+npm run dev
+```
+
+Open [Studio](http://localhost:3000/dashboard). The connection strip should say **Live engine**. [Gateway health](http://localhost:4000/health) should report `redis.status: connected` and `redis.isDemo: false`.
+
+The explicit environment settings above disable the development file's automatic demo fallback. To explore sample data deliberately, use **Use demo** in connection settings; Studio labels that source.
+
+### Local access and configuration
+
+The local playground opens without sign-in only when all four conditions hold: `STUDIO_PLAYGROUND=true`, development mode, a loopback bind address, and a direct loopback peer. Authenticated deployments retain JWT sessions and viewer/operator/admin roles. These local settings are not a production security configuration.
+
+The gateway reads shell environment variables first, then its selected `.env` file. See [.env.example](.env.example) and [the environment schema](studio/gateway/src/config/env.ts) for connection, TLS, access, and CORS settings. One connection change affects all users of that gateway.
+
+## Try it
+
+In Studio's **Console**, run one command at a time:
+
+```redis
+PING
+SET readme:message "hello from C++" EX 120
+GET readme:message
+HSET readme:user name Ada role engineer
+LPUSH readme:queue first second
+SADD readme:tags cpp database
+ZADD readme:scores 100 player1 200 player2
+SCAN 0 MATCH readme:* COUNT 100
+```
+
+`PING` should return `PONG`; `GET` should return `hello from C++`. Open Key Explorer to inspect the five key types. The string expires after two minutes. These writes use the database selected in Studio.
+
+With `redis-cli` installed, read the same value directly from the engine:
+
 ```bash
-# Terminal 1: Fastify API Gateway
-npm run backend
-
-# Terminal 2: React 18 Studio Frontend
-npm run frontend
+redis-cli -h 127.0.0.1 -p 6379 -n 0 GET readme:message
 ```
-Navigate to **[http://localhost:3000](http://localhost:3000)**. The gateway will automatically fall back to the built-in mock demo engine with pre-seeded datasets, live telemetry, and simulated memory pressure.
 
-### Option 3: Native C++ Engine (Linux / WSL2)
+Select DB0 in Studio for this exact comparison. Cleanup removes only the example keys:
+
+```redis
+DEL readme:message readme:user readme:queue readme:tags readme:scores
+```
+
+## Monitoring
+
+With the native/WSL engine running on port 6379 and its metrics endpoint on 9121:
+
+```powershell
+docker compose -p pbredisdb -f docker-compose.monitoring.yml up -d --wait
+```
+
+| Service | Address | Use |
+| --- | --- | --- |
+| Studio | [localhost:3000](http://localhost:3000/metrics) | Live readings and the guided monitoring walkthrough |
+| Gateway | [localhost:4000/health](http://localhost:4000/health) | Engine connection and access mode |
+| Engine exporter | [localhost:9121/metrics](http://localhost:9121/metrics) | Raw Prometheus-format engine counters |
+| Prometheus | [localhost:9090/targets](http://localhost:9090/targets) | Target health and metric queries |
+| Grafana | [localhost:3002](http://localhost:3002/d/redisx-overview/redisx-overview) | Provisioned RedisX overview |
+
+The Metrics page has **Open Prometheus**, **Open Grafana**, and a three-step **Quick start** with copyable commands and expected results. Start with `up{job="redisx"}` in Prometheus; `1` means the scrape succeeded.
+
+The monitoring-only Compose file targets `host.docker.internal:9121`. The full Docker stack targets `redisx:9121`. Named volumes retain monitoring history. If the repository moves, recreate monitoring containers from the new checkout so bind mounts point to the right files. See [monitoring setup and troubleshooting](docs/monitoring.md).
+
+Studio's charts use gateway history held in memory, up to 48 hours including comparison windows. Grafana uses Prometheus history. Studio displays measured INFO round-trip time when command percentiles are unavailable; older engines without network counters show measured **Studio connection traffic**, which excludes other clients.
+
+## Verification
+
+These are local results, not a hosted release certification. Commands, evidence, environment, and scope are recorded in [the verification report](docs/verification.md).
+
+| Check | Recorded result | Scope |
+| --- | --- | --- |
+| Gateway and frontend tests | **88 passed: 38 gateway + 50 frontend** | Request validation, access boundaries, data parsing, editors, history bounds, and formatter reuse |
+| Studio → C++ integration | **16 checks passed** | All five key types, direct RESP agreement, TTL preservation, deletion, concurrent DB isolation, telemetry, and DB15 execution |
+| Browser workflows | **6 passed; 18 routes exercised** | CRUD/TTL, console, disconnects, Metrics controls, monitoring walkthrough, themes, and mobile layout |
+| Metrics memory stress | **1 passed with a 10,000-point fixture and a 128 MiB JS heap limit** | Comparisons, scrolling, hidden tabs, repeated route navigation, and memory bounds |
+| C++ Debug / ASan+UBSan / TSan | **94/94 in each recorded run** | Engine audit results from 19 October 2026; includes a grouped real-server audit |
+| RESP parser fuzzing | **419,081 executions in 301 seconds** | Recorded sanitizer run with no detected crash; bounded parser coverage |
+
+A Metrics crash investigation also produced a reproducible measurement: renderer private memory reached **1,601 MiB in about 10 seconds** before the fix. After formatter reuse, bounded data, and chart visibility changes, the same live-page profile stayed around **150–230 MiB over one minute**, without forced garbage collection. This is a diagnostic observation on one machine, not a universal memory budget. [Before/after evidence and procedure](docs/metrics-memory.md).
+
+The current production build reports **81.7 KiB gzip for initial public-route JavaScript**. That measurement excludes the later Studio, charts, and editor chunks; it is not the download size of the whole application.
+
+### Run the checks
+
+```powershell
+npm run typecheck
+npm test
+npm run build
+
+# The app and engine must already be running.
+$env:STUDIO_URL = 'http://localhost:3000'
+$env:ENGINE_PORT = '6379'
+npm run test:studio
+npm --prefix studio/web run test:metrics-memory
+```
+
+The native integration verifier expects a separate, freshly built engine on port 16379 by default. It creates uniquely named temporary keys and cleans them up:
+
+```powershell
+$env:ENGINE_PORT = '16379'
+npm run verify:engine
+```
+
+For C++ checks in Linux/WSL, use the [testing guide](docs/testing.md). A minimal build without benchmark dependencies is:
+
 ```bash
-# Build stripped release binary
-cmake -B build-wsl -S . -DCMAKE_BUILD_TYPE=Release
-cmake --build build-wsl --target redisx --parallel $(nproc)
-
-# Launch RedisX Reactor on port 6379
-./build-wsl/redisx -h 127.0.0.1 -p 6379 -c infra/configs/pbRedis.conf
+cmake --preset debug -DREDISX_BUILD_BENCHMARKS=OFF
+cmake --build --preset debug --parallel 2
+ctest --preset debug --output-on-failure
 ```
 
----
+The [Studio workflow](.github/workflows/studio.yml) contains the isolated engine, gateway, browser, and memory-test launch sequence. The [engine workflow](.github/workflows/ci.yml) runs Debug and sanitizer builds. Their configuration is included; hosted CI results were not verified for this README.
 
-## 🏛️ System Architecture
+## Limitations
+
+- **Protocol and commands:** RESP2 is supported; RESP3 and complete Redis command parity are not. Check `COMMAND LIST` on the actual engine. Lua, Redis modules, Redis Cluster, Streams, Geo, and HyperLogLog are outside the implemented scope.
+- **Persistence:** snapshots use the RedisX format, not Redis RDB. `everysec` fsync can stall the event loop on slow storage. The completed tests do not establish a power-loss durability guarantee or a production recovery-time objective.
+- **Replication:** primary/replica streaming is implemented; automatic failover, Redis Cluster routing, and upstream replica AUTH/TLS are not. Full sync serializes a snapshot synchronously.
+- **Memory:** engine accounting estimates tracked dataset allocations, not total process RSS. `maxmemory` is not a hard process-memory ceiling. Browser profiling is a separate measurement.
+- **Studio:** capability-dependent operations can return an explicit unsupported response. Live MONITOR, snapshot inspection, and replication preflight remain unavailable in the verified path. Shared-socket transactions are blocked in the console; the native engine has separate transaction tests.
+- **Evidence:** no current-code throughput benchmark or 100,000-key/60 FPS certification is claimed. [Older benchmark reports](docs/benchmarks.md) remain available as historical material.
+
+## Source map
 
 ```text
- ┌────────────────────────────────────────────────────────────────────────────────┐
- │                                REDISX STUDIO                                   │
- │                          React 18 + Vite Web App                               │
- │                           (Port 3000 · <87 KB)                                 │
- └───────────────────────────────────┬────────────────────────────────────────────┘
-                                     │ HTTP REST + WebSockets
-                                     v
- ┌────────────────────────────────────────────────────────────────────────────────┐
- │                             FASTIFY API GATEWAY                                │
- │                 Zod Validation · AST Safety Engine · JWT Auth                  │
- │                               (Port 4000)                                      │
- └───────────────────────────────────┬────────────────────────────────────────────┘
-                                     │ Vectorized Commands (No Shell Concatenation)
-                                     v
- ┌────────────────────────────────────────────────────────────────────────────────┐
- │                           REDISX C++20 ENGINE                                  │
- │                      Single-Threaded Epoll Reactor                             │
- │                               (Port 6379)                                      │
- └──────┬────────────────────────────┬─────────────────────────────┬──────────────┘
-        │                            │                             │
-        v                            v                             v
- ┌───────────────┐           ┌───────────────┐             ┌───────────────┐
- │ Keyspace Dict │           │  Dual Engine  │             │ PSYNC Primary │
- │  & TTL Timer  │           │   AOF + RDB   │             │   Replica     │
- └───────────────┘           └───────────────┘             └───────────────┘
+src/                    C++ runtime and command implementations
+include/redisx/         Engine interfaces and data structures
+studio/gateway/         Fastify API, RESP client, safety rules, metrics sampler
+studio/web/             React workspace, public site, browser tests
+tests/                  C++ unit, process, compatibility, property, and fuzz checks
+infra/                  Container builds, engine configs, monitoring provisioning
+docs/architecture/      SVG export and editable Excalidraw scene
+docs/evidence/          Small, checked-in verification records
+tools/                  Workspace launcher and command-line utilities
 ```
 
----
+## Further reading
 
-## 📸 Screenshots & Visual Tour
+- [Verification results and evidence](docs/verification.md)
+- [Engine audit and compatibility boundaries](docs/engine-audit.md)
+- [Persistence format and recovery behavior](docs/persistence-format.md)
+- [Replication protocol and limitations](docs/replication.md)
+- [Studio implementation review](docs/studio-review.md)
+- [Monitoring setup](docs/monitoring.md)
+- [Metrics memory regression](docs/metrics-memory.md)
 
-| Feature | Screenshot / Preview | Description |
-| :--- | :--- | :--- |
-| **Interactive Dashboard** | ![Dashboard](docs/screenshots/dashboard.png) | Live ops/sec sparklines, RAM utilization gauge, hit-rate meter, and auto-detecting health diagnostics. |
-| **Key Explorer** | ![Key Explorer](docs/screenshots/keys.png) | Virtualized split-pane browser handling 100k+ keys at 60fps, namespace tree, and typed editors. |
-| **Interactive Console** | ![Console](docs/screenshots/console.png) | CodeMirror 6 terminal, multi-command pipelining, AST safety blocking, and persistent history. |
-| **Architecture Tour** | ![Architecture Tour](docs/screenshots/tour.png) | Interactive SVG pipeline animating requests from TCP socket to storage engine with live telemetry. |
-| **Guided Labs** | ![Guided Labs](docs/screenshots/labs.png) | 6 interactive learning scenarios running in sandbox DB 15 with automated verification. |
+## Contributing
 
-*(High-resolution asset captures can be generated via the Playwright visual regression suite).*
+Keep changes focused and include the check that exercises the behavior being changed. Engine changes should run the relevant CTest cases; UI and gateway changes should run the relevant npm and browser checks. Include the command, environment, and raw output when adding a performance claim. Do not treat a benchmark result, a model test, or a successful smoke test as a broader correctness guarantee.
 
----
+## License
 
-## 📊 Performance & Bundle Size Report
-
-RedisX Studio utilizes route-level code-splitting with `React.lazy()` and `Suspense`, ensuring the initial route bundle stays well below the strict **250 KB gzip budget**:
-
-| Chunk / Module | Raw Size | Gzip Size | Loading Strategy |
-| :--- | :--- | :--- | :--- |
-| **Initial Entry (`index.js`)** | **66.28 kB** | **19.40 kB** | Entry chunk loaded on first paint |
-| **React Core (`vendor-react`)** | **180.81 kB** | **59.46 kB** | Cached shared framework runtime |
-| **Icons (`vendor-icons`)** | **39.90 kB** | **7.25 kB** | Cached Lucide iconography |
-| **TOTAL INITIAL LOAD** | **286.99 kB** | **86.11 kB** | **< 35% of 250 KB Budget! ⚡** |
-| `vendor-codemirror` | 397.67 kB | 129.81 kB | Lazy-loaded on `/console` & `/playground` |
-| `vendor-charts` | 418.32 kB | 119.53 kB | Lazy-loaded on `/metrics` & `/dashboard` |
-| All 18 Route Pages | 12.0 – 69.1 kB | 3.8 – 14.4 kB | Asynchronously split per route |
-
-### Virtualized 60 FPS Rendering
-The Key Explorer virtualizes large keysets using `@tanstack/react-virtual`:
-- **DOM Stability**: Renders only ~20 active DOM nodes regardless of whether 1,000 or 100,000 keys exist.
-- **Scroll Frame Rate**: Maintains a locked **60 FPS** scroll with zero main-thread blocking tasks.
-- **Debounced Lookups**: Real-time pattern searches (`*user*`) debounced to 250ms to prevent gateway saturation.
-
----
-
-## 🛡️ Security & Safety Model
-
-RedisX enforces an enterprise-grade defense-in-depth model across the API Gateway:
-
-1. **Zero Command-Injection Vector**:
-   - Commands are parsed into typed `string[]` arrays and executed via direct RESP socket tokens (`(ioredis.call(command, ...args)`).
-   - Shell string concatenation and shell execution (`exec`/`spawn`) are strictly forbidden.
-
-2. **Secret Redaction**:
-   - `AUTH` passwords, `CONFIG SET requirepass`, and `ACL SETUSER >password` parameters are automatically sanitized into `******` before storing in audit logs.
-   - Fastify logger headers and request bodies redact `authorization` and `password` fields.
-
-3. **Rate-Limited Authentication**:
-   - In-memory sliding window rate limiter permits a maximum of 5 failed login attempts per minute per IP/user, responding with `429 Too Many Requests`.
-
-4. **Safety Guardian Gatekeeper**:
-   - Destructive operations (`FLUSHALL`, `FLUSHDB`, `SHUTDOWN`, `DEBUG`, `KEYS *`) are intercepted by the AST Safety Engine.
-   - Operators and viewers cannot run dangerous commands; administrators must type **`CONFIRM`** in the confirmation modal before unlocking execution.
-
-5. **Security Headers & Strict CORS**:
-   - Full Content Security Policy (CSP), `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY` applied to all HTTP responses.
-   - CORS locked exclusively to authorized browser origins.
-
----
-
-## 👥 Role & Permissions Matrix
-
-| Feature / Command Category | Viewer (`viewer`) | Operator (`operator`) | Administrator (`admin`) |
-| :--- | :---: | :---: | :---: |
-| **Read Operations** (`GET`, `MGET`, `HGETALL`, `SCAN`) | ✅ Allowed | ✅ Allowed | ✅ Allowed |
-| **Standard Keyspace Writes** (`SET`, `HSET`, `LPUSH`) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
-| **Key TTL & Expiration** (`EXPIRE`, `PERSIST`) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
-| **Key Deletion** (`DEL`, `UNLINK`, Bulk Delete) | ❌ Blocked (403) | ✅ Allowed | ✅ Allowed |
-| **Live Pub/Sub Publishing** (`PUBLISH`) | ❌ Read-Only | ✅ Allowed | ✅ Allowed |
-| **Configuration Mutations** (`CONFIG SET`) | ❌ Blocked (403) | ❌ Blocked (403) | ✅ Requires Unlock |
-| **Destructive Commands** (`FLUSHALL`, `SHUTDOWN`) | ❌ Blocked (403) | ❌ Blocked (403) | ✅ Requires Unlock |
-| **ACL User Management** (`ACL SETUSER`, `ACL DELUSER`)| ❌ Blocked (403) | ❌ Blocked (403) | ✅ Allowed |
-
----
-
-## 🧭 Page Features Matrix & Status Checklist
-
-| Page Route | Primary Capabilities | Status | Server Support |
-| :--- | :--- | :---: | :--- |
-| **`/dashboard`** | Telemetry sparklines, health diagnostics, condition simulators | **Working** | Full (Native / Demo) |
-| **`/keys`** | Split pane, virtualized list, namespace tree, String/Hash/List/Set/ZSet editors, TTL bulk manager | **Working** | Full (Native / Demo) |
-| **`/console`** | CodeMirror 6 terminal, autocomplete, explain drawer, pipelining, history modal | **Working** | Full (Native / Demo) |
-| **`/playground`** | Interactive visualizer for Strings, Lists, Hashes, Sets, Sorted Sets, Bitmaps, and HyperLogLogs | **Working** | Full (Native / Demo) |
-| **`/memory`** | Treemap memory analyzer, fragmentation ratio, eviction simulation | **Working** | Full (Native / Demo) |
-| **`/expiration`** | Live TTL countdowns, expiration histogram, lazy vs active expiry simulator | **Working** | Full (Native / Demo) |
-| **`/clients`** | Connected clients table, kill client, slow connection detection | **Working** | Full (Native / Demo) |
-| **`/slowlog`** | Execution latency threshold log, Big-O root cause hints, reset | **Working** | Full (Native / Demo) |
-| **`/persistence`** | Dual AOF/RDB timeline, snapshot inspector, BGSAVE trigger | **Working** | Full (Native / Demo) |
-| **`/replication`** | Topology visualizer, lag offset tracker, REPLICAOF configuration | **Working** | Full (Native / Demo) |
-| **`/security`** | ACL user editor, password hasher, category permissions builder | **Working** | Full (Native / Demo) |
-| **`/config`** | Searchable runtime configurations, live validation, config export | **Working** | Full (Native / Demo) |
-| **`/metrics`** | Multi-metric historical chart explorer, p99 latency tracker | **Working** | Full (Native / Demo) |
-| **`/monitor`** | Streaming live command monitor with regex filters and pause buffer | **Working** | Full (Native / Demo) |
-| **`/pubsub`** | Interactive multi-channel pub/sub tester and message inspector | **Working** | Full (Native / Demo) |
-| **`/learn/tour`** | Interactive 9-stage SVG architecture diagram with request tracer | **Working** | Full (Native / Demo) |
-| **`/learn/commands`**| Searchable 68+ command catalog, Big-O complexity filters, playground links | **Working** | Full (Native / Demo) |
-| **`/learn/labs`** | 6 guided hands-on database scenario labs with automated check verification | **Working** | Sandbox DB 15 |
-
----
-
-## 🌐 Supported Servers
-
-RedisX Studio communicates over standard RESP2 and RESP3 protocols:
-* **RedisX Engine** (`pbRedisDB`): Full support for all core primitives, replication, and telemetry.
-* **Redis 6.x, 7.x, 7.2.x**: Full compatibility across all commands and ACL rules.
-* **Valkey 7.2+ / KeyDB**: Full compatibility for keyspace inspection and telemetry.
-* **Standalone Demo Mode**: 100% offline simulation requiring zero external binaries.
-
----
-
-## 🚫 What's Not Implemented
-
-To maintain architectural simplicity and focus on high-performance single-node predictability, the following features are intentionally out of scope:
-1. **Redis Cluster (Multi-Master Sharding)**: RedisX focuses on master-replica PSYNC topologies; cluster-bus gossip and multi-node hash slot migrations (`CLUSTER SLOTS`) are not implemented.
-2. **Lua Scripting Engine (`EVAL`)**: Embedded Lua runtime execution is omitted in favor of atomic multi-command pipelining (`MULTI`/`EXEC`).
-3. **Dynamic C Module API (`MODULE LOAD`)**: Dynamic shared library loading is not supported.
-
----
-
-## 🧪 Testing & Verification
-
-Run the complete test suite across all packages:
-```bash
-# Run both Gateway and Web test suites
-npm test
-
-# Run Gateway integration tests (Auth, Safety, Caps, Zod validation)
-npm run test:gateway
-
-# Run Web React component tests (Key Explorer, Editors, Console, Modals)
-npm run test:web
-```
-
----
-
-## 📜 License
-
-MIT License. Crafted with precision for distributed systems engineers and database enthusiasts.
-
-
-
-
-## extra image: 
-
-               ┌───────────────────────────────────────────────────────────────┐
-               │              DOCKER BRIDGE NETWORK: pbredisdb_default         │
-               │                                                               │
-               │   ┌───────────┐    proxy /api/     ┌───────────┐              │
-               │   │    web    │ ─────────────────► │  gateway  │              │
-               │   │ (Port 3000)│                   │(Port 4000)│              │
-               │   └───────────┘                    └─────┬─────┘              │
-               │                                          │                    │
-               │                                          │ RESP TCP           │
-               │                                          │ port 6379          │
-               │                                          ▼                    │
-               │   ┌───────────┐   scrape :9121     ┌───────────┐              │
-               │   │prometheus │ ─────────────────► │  redisx   │              │
-               │   │(Port 9090)│                    │(Port 6379)│              │
-               │   └─────┬─────┘                    └───────────┘              │
-               │         ▲                                                     │
-               │         │ PromQL query                                        │
-               │         │ http://prometheus:9090                              │
-               │   ┌─────┴─────┐                                               │
-               │   │  grafana  │                                               │
-               │   │(Port 3000)│                                               │
-               │   └───────────┘                                               │
-               └───────────────────────────────────────────────────────────────┘
-                                      ▲
-                                      │ Port Forwarding (Host Ports)
-                                      │
-              ┌───────────────────────┴────────────────────────┐
-              │           YOU / BROWSER / HOST MACHINE         │
-              │   • http://localhost:3000 (React Web Studio)   │
-              │   • http://localhost:3002 (Grafana Dashboards) │
-              │   • localhost:6379        (redis-cli)          │
-              └────────────────────────────────────────────────┘
+The existing project documentation declares MIT licensing. A standalone `LICENSE` file is not present in this checkout.

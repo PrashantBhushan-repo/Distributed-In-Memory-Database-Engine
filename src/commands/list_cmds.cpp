@@ -1,5 +1,6 @@
 #include "redisx/commands/list_cmds.h"
 #include "redisx/proto/resp_writer.h"
+#include "redisx/commands/numeric.h"
 
 namespace redisx::commands {
 
@@ -106,8 +107,8 @@ static void handle_lrange(const proto::Command &cmd, db::Keyspace &ks, std::size
     const std::string &key = cmd.arg(1);
     if (!check_type(ks, db_idx, key, types::ObjectType::List, out)) return;
 
-    ptrdiff_t start = std::stoll(cmd.arg(2));
-    ptrdiff_t stop = std::stoll(cmd.arg(3));
+    ptrdiff_t start = parse_integer(cmd.arg(2));
+    ptrdiff_t stop = parse_integer(cmd.arg(3));
 
     auto *entry = ks.db_get(db_idx, key);
     if (!entry) {
@@ -135,8 +136,8 @@ static void handle_llen(const proto::Command &cmd, db::Keyspace &ks, std::size_t
 }
 
 void register_list_commands(Dispatcher &dispatcher) {
-    dispatcher.register_command({"LPUSH", -3, CMD_FLAG_WRITE, handle_lpush});
-    dispatcher.register_command({"RPUSH", -3, CMD_FLAG_WRITE, handle_rpush});
+    dispatcher.register_command({"LPUSH", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, handle_lpush});
+    dispatcher.register_command({"RPUSH", -3, CMD_FLAG_WRITE | CMD_FLAG_DENYOOM, handle_rpush});
     dispatcher.register_command({"LPOP", 2, CMD_FLAG_WRITE, handle_lpop});
     dispatcher.register_command({"RPOP", 2, CMD_FLAG_WRITE, handle_rpop});
     dispatcher.register_command({"LRANGE", 4, CMD_FLAG_READONLY, handle_lrange});

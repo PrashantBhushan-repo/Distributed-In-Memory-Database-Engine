@@ -40,10 +40,10 @@ class ConfigManager {
     void register_param(ConfigParam param);
 
     bool load_file(const std::string &file_path);
-    void load_cli_args(int argc, char **argv);
+    bool load_cli_args(int argc, char **argv);
 
     [[nodiscard]] std::vector<std::pair<std::string, std::string>> config_get(const std::string &pattern) const;
-    bool config_set(const std::string &param_name, const std::string &value, std::string &err_msg);
+    bool config_set(const std::string &param_name, const std::string &value, std::string &err_msg, bool startup = false);
     bool config_rewrite(const std::string &file_path);
 
     [[nodiscard]] std::string get_string(const std::string &param_name, const std::string &def = "") const;

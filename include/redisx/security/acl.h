@@ -27,14 +27,15 @@ enum CommandCategory : std::uint32_t {
 
 struct User {
     std::string name;
-    bool enabled{true};
-    bool nopass{true};
+    bool enabled{false};
+    bool nopass{false};
     std::vector<std::string> password_hashes;
     std::unordered_set<std::string> allowed_commands;
     std::unordered_set<std::string> disabled_commands;
-    std::uint32_t category_mask{CMD_CAT_ALL};
-    std::vector<std::string> key_patterns{"*"};
-    std::vector<std::string> channel_patterns{"*"};
+    std::uint32_t category_mask{CMD_CAT_NONE};
+    std::vector<std::string> permission_rules;
+    std::vector<std::string> key_patterns{};
+    std::vector<std::string> channel_patterns{};
 };
 
 class AclEngine {
@@ -44,6 +45,7 @@ class AclEngine {
     bool set_user_rules(const std::string &username, const std::vector<std::string> &rules, std::string &err_msg);
     [[nodiscard]] const User *get_user(const std::string &username) const;
     [[nodiscard]] User *get_user_mut(const std::string &username);
+    [[nodiscard]] bool authenticate(const std::string &username, std::string_view password) const;
     bool del_user(const std::string &username);
 
     [[nodiscard]] std::vector<std::string> list_users() const;

@@ -5,9 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:studio": "playwright test --config playwright.studio.config.ts",
+    "test:metrics-memory": "playwright test --config playwright.metrics-memory.config.ts",
+    "test:landing": "playwright test --config playwright.landing.config.ts --workers=1",
+    "test:performance": "lhci autorun --config=lighthouserc.cjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.15",
@@ -22,6 +27,9 @@
     "tailwind-merge": "^2.5.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.64.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -29,6 +37,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.10",

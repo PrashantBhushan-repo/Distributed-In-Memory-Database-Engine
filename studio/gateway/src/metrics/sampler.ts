@@ -1,13 +1,16 @@
 import { ParsedRedisInfo, MetricSample, HealthSummary, HealthIssue } from '../types.js';
 import { RedisGatewayClient } from '../redis/client.js';
+import { env } from '../config/env.js';
 
 export class MetricsSampler {
   private client: RedisGatewayClient;
   private timer: NodeJS.Timeout | null = null;
+  private collecting = false;
+  private sourceGeneration = 0;
 
   // Ring buffers
   private recent1sSamples: MetricSample[] = []; // Max 900 samples (15 mins)
-  private history5sSamples: MetricSample[] = []; // Max 17,280 samples (24h at 5s)
+  private history5sSamples: MetricSample[] = []; // Max 34,560 samples (48h including comparison)
   private tickCounter = 0;
 
   // Previous reading for delta calculations
@@ -20,6 +23,7 @@ export class MetricsSampler {
     expired: number;
     netIn: number;
     netOut: number;
+    networkScope?: 'engine' | 'gateway';
   } | null = null;
 
   private latestSample: MetricSample | null = null;
@@ -35,36 +39,38 @@ export class MetricsSampler {
 
   // Pre-seed realistic historical data so sparklines look great immediately on boot
   private seedInitialHistory() {
+    const isDemo = this.client.getStatus().isDemo;
+    if (!isDemo) return;
     const now = Date.now();
     const count = 720; // 1 hour at 5s intervals
     for (let i = count; i >= 0; i--) {
       const t = now - i * 5000;
       const wave = Math.sin(t / 60000);
       const wave2 = Math.cos(t / 25000);
-      const ops = Math.floor(12200 + wave * 2800 + wave2 * 900);
-      const mem = Math.floor(48500000 + wave * 2200000);
-      const hit = Math.min(99.4, Math.max(91.0, 96.5 + wave * 2.1));
-      const clients = Math.floor(42 + Math.abs(wave) * 12);
-      const p99 = Math.round((0.85 + Math.abs(wave2) * 0.45) * 100) / 100;
+      const ops = isDemo ? Math.floor(12200 + wave * 2800 + wave2 * 900) : 0;
+      const mem = isDemo ? Math.floor(48500000 + wave * 2200000) : 1048576;
+      const hit = isDemo ? Math.min(99.4, Math.max(91.0, 96.5 + wave * 2.1)) : 100.0;
+      const clients = isDemo ? Math.floor(42 + Math.abs(wave) * 12) : 1;
+      const p99 = isDemo ? Math.round((0.85 + Math.abs(wave2) * 0.45) * 100) / 100 : 0.25;
 
       const sample: MetricSample = {
         timestamp: t,
-        opsPerSec: Math.max(100, ops),
+        opsPerSec: Math.max(0, ops),
         hitRate: Math.round(hit * 10) / 10,
         usedMemory: mem,
         usedMemoryHuman: (mem / (1024 * 1024)).toFixed(2) + 'M',
         maxMemory: 268435456, // 256MB
         memoryPercent: Math.round((mem / 268435456) * 1000) / 10,
         connectedClients: clients,
-        blockedClients: 2,
-        totalKeys: 1850 + Math.floor(wave * 40),
+        blockedClients: 0,
+        totalKeys: isDemo ? 1850 + Math.floor(wave * 40) : 0,
         evictedKeysPerSec: 0,
-        expiredKeysPerSec: Math.floor(Math.random() * 5),
+        expiredKeysPerSec: 0,
         networkInputBytesPerSec: ops * 64,
         networkOutputBytesPerSec: ops * 256,
         p99LatencyMs: p99,
-        p50LatencyMs: Math.round((0.24 + Math.abs(wave2) * 0.1) * 100) / 100,
-        p90LatencyMs: Math.round((0.52 + Math.abs(wave2) * 0.2) * 100) / 100,
+        p50LatencyMs: isDemo ? Math.round((0.24 + Math.abs(wave2) * 0.1) * 100) / 100 : 0.10,
+        p90LatencyMs: isDemo ? Math.round((0.52 + Math.abs(wave2) * 0.2) * 100) / 100 : 0.18,
         opsByCommand: {
           get: Math.round(ops * 0.48),
           set: Math.round(ops * 0.24),
@@ -73,7 +79,7 @@ export class MetricsSampler {
           other: Math.round(ops * 0.06),
         },
         replicationLagSeconds: 0,
-        replicationLagBytes: 120,
+        replicationLagBytes: 0,
         rehashActive: false,
       };
 
@@ -88,7 +94,9 @@ export class MetricsSampler {
   public start() {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      this.collectSample().catch(() => {});
+      if (this.collecting) return;
+      this.collecting = true;
+      this.collectSample().catch(() => {}).finally(() => { this.collecting = false; });
     }, 1000);
   }
 
@@ -97,6 +105,13 @@ export class MetricsSampler {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  public reset() {
+    this.sourceGeneration++;
+    this.recent1sSamples = []; this.history5sSamples = []; this.lastStats = null;
+    this.latestSample = null; this.simulatedCondition = null; this.tickCounter = 0;
+    this.seedInitialHistory();
   }
 
   public setSimulatedCondition(condition: string | null) {
@@ -108,36 +123,30 @@ export class MetricsSampler {
   }
 
   public async collectSample(): Promise<MetricSample> {
+    const sourceGeneration = this.sourceGeneration;
     const now = Date.now();
-    let info: ParsedRedisInfo;
-    try {
-      info = await this.client.getInfo();
-    } catch {
-      info = {
-        server: { redis_version: '0.1.0', uptime_in_seconds: 3600, tcp_port: 6379, role: 'master' },
-        clients: { connected_clients: 42, blocked_clients: 0, maxclients: 10000 },
-        memory: { used_memory: 50000000, used_memory_human: '47.68M', used_memory_peak: 55000000, maxmemory: 268435456, maxmemory_policy: 'volatile-lru' },
-        stats: { total_connections_received: 100, total_commands_processed: 12000, instantaneous_ops_per_sec: 12000, keyspace_hits: 900, keyspace_misses: 40, hit_rate: 95.7 },
-        replication: { role: 'master', connected_slaves: 2, master_repl_offset: 10000, repl_backlog_size: 1048576 },
-        persistence: { rdb_last_bgsave_status: 'ok', rdb_changes_since_last_save: 0, aof_enabled: true },
-        keyspace: { db0: { keys: 1850, expires: 450, avg_ttl: 1840 } },
-      };
-    }
+    const readStart = performance.now();
+    const info = await this.client.getInfo();
+    const infoLatencyMs = Math.round((performance.now() - readStart) * 1000) / 1000;
+    if (sourceGeneration !== this.sourceGeneration) throw new Error('The engine connection changed during sampling.');
 
     const currentCommands = info.stats.total_commands_processed || 0;
     const currentHits = info.stats.keyspace_hits || 0;
     const currentMisses = info.stats.keyspace_misses || 0;
     const currentEvicted = (info.stats as any).evicted_keys || 0;
     const currentExpired = (info.stats as any).expired_keys || 0;
-    const currentNetIn = (info.stats as any).total_net_input_bytes || currentCommands * 64;
-    const currentNetOut = (info.stats as any).total_net_output_bytes || currentCommands * 128;
+    const engineNetwork = info.stats.total_net_input_bytes !== undefined && info.stats.total_net_output_bytes !== undefined;
+    const gatewayNetwork = engineNetwork ? null : this.client.getNetworkCounters?.();
+    const networkScope = engineNetwork ? 'engine' as const : gatewayNetwork ? 'gateway' as const : undefined;
+    const currentNetIn = engineNetwork ? info.stats.total_net_input_bytes! : gatewayNetwork?.inputBytes ?? 0;
+    const currentNetOut = engineNetwork ? info.stats.total_net_output_bytes! : gatewayNetwork?.outputBytes ?? 0;
 
-    let opsPerSec = info.stats.instantaneous_ops_per_sec || 12000;
-    let hitRate = info.stats.hit_rate || 96.5;
+    let opsPerSec = typeof info.stats.instantaneous_ops_per_sec === 'number' ? info.stats.instantaneous_ops_per_sec : 0;
+    let hitRate = typeof info.stats.hit_rate === 'number' ? info.stats.hit_rate : 100.0;
     let evictedPerSec = 0;
     let expiredPerSec = 0;
-    let netInPerSec = currentCommands * 64;
-    let netOutPerSec = currentCommands * 128;
+    let netInPerSec = 0;
+    let netOutPerSec = 0;
 
     if (this.lastStats) {
       const elapsedSec = Math.max(0.1, (now - this.lastStats.time) / 1000);
@@ -156,8 +165,10 @@ export class MetricsSampler {
 
       evictedPerSec = Math.max(0, Math.round((currentEvicted - this.lastStats.evicted) / elapsedSec));
       expiredPerSec = Math.max(0, Math.round((currentExpired - this.lastStats.expired) / elapsedSec));
-      netInPerSec = Math.max(0, Math.round((currentNetIn - this.lastStats.netIn) / elapsedSec));
-      netOutPerSec = Math.max(0, Math.round((currentNetOut - this.lastStats.netOut) / elapsedSec));
+      if (networkScope === this.lastStats.networkScope) {
+        netInPerSec = Math.max(0, (currentNetIn - this.lastStats.netIn) / elapsedSec);
+        netOutPerSec = Math.max(0, (currentNetOut - this.lastStats.netOut) / elapsedSec);
+      }
     }
 
     this.lastStats = {
@@ -169,6 +180,7 @@ export class MetricsSampler {
       expired: currentExpired,
       netIn: currentNetIn,
       netOut: currentNetOut,
+      networkScope,
     };
 
     let totalKeys = 0;
@@ -176,8 +188,8 @@ export class MetricsSampler {
       totalKeys += db.keys || 0;
     }
 
-    const maxMem = info.memory.maxmemory || 268435456;
-    let usedMem = info.memory.used_memory || 48500000;
+    const maxMem = info.memory.maxmemory;
+    let usedMem = typeof info.memory.used_memory === 'number' && info.memory.used_memory >= 0 ? info.memory.used_memory : 1048576;
 
     // Apply simulation condition if active
     if (this.simulatedCondition === 'high_memory') {
@@ -190,8 +202,6 @@ export class MetricsSampler {
     }
 
     const memPercent = maxMem > 0 ? Math.round((usedMem / maxMem) * 1000) / 10 : 0;
-    const wave = Math.sin(now / 5000);
-    const p99 = Math.round((0.82 + Math.abs(wave) * 0.4) * 100) / 100;
 
     const sample: MetricSample = {
       timestamp: now,
@@ -208,19 +218,11 @@ export class MetricsSampler {
       expiredKeysPerSec: expiredPerSec,
       networkInputBytesPerSec: netInPerSec,
       networkOutputBytesPerSec: netOutPerSec,
-      p99LatencyMs: p99,
-      p50LatencyMs: Math.round((0.24 + Math.abs(wave) * 0.1) * 100) / 100,
-      p90LatencyMs: Math.round((0.54 + Math.abs(wave) * 0.2) * 100) / 100,
-      opsByCommand: {
-        get: Math.round(opsPerSec * 0.48),
-        set: Math.round(opsPerSec * 0.24),
-        hget: Math.round(opsPerSec * 0.14),
-        zadd: Math.round(opsPerSec * 0.08),
-        other: Math.max(0, opsPerSec - Math.round(opsPerSec * 0.94)),
-      },
-      replicationLagSeconds: 0,
-      replicationLagBytes: 120,
-      rehashActive: false,
+      networkAvailable: networkScope !== undefined,
+      networkScope,
+      p99LatencyMs: null,
+      infoLatencyMs: this.client.getStatus().isDemo ? undefined : infoLatencyMs,
+      replicationOffsetBytes: info.replication.master_repl_offset,
     };
 
     this.latestSample = sample;
@@ -231,11 +233,11 @@ export class MetricsSampler {
       this.recent1sSamples.shift();
     }
 
-    // Every 5 seconds, push to 24h history ring buffer (max 17,280 samples)
+    // Keep 48 hours at five-second intervals, including the previous 24h window.
     this.tickCounter++;
     if (this.tickCounter % 5 === 0) {
       this.history5sSamples.push(sample);
-      if (this.history5sSamples.length > 17280) {
+      if (this.history5sSamples.length > 34560) {
         this.history5sSamples.shift();
       }
     }
@@ -246,21 +248,21 @@ export class MetricsSampler {
   public getLatestSample(): MetricSample {
     return (
       this.latestSample || {
-        timestamp: Date.now(),
-        opsPerSec: 12450,
-        hitRate: 96.5,
-        usedMemory: 48500000,
-        usedMemoryHuman: '46.25M',
-        maxMemory: 268435456,
-        memoryPercent: 18.1,
-        connectedClients: 42,
-        blockedClients: 2,
-        totalKeys: 1850,
+        timestamp: 0,
+        opsPerSec: 0,
+        hitRate: 0,
+        usedMemory: 0,
+        usedMemoryHuman: '—',
+        maxMemory: 0,
+        memoryPercent: 0,
+        connectedClients: 0,
+        blockedClients: 0,
+        totalKeys: 0,
         evictedKeysPerSec: 0,
-        expiredKeysPerSec: 3,
-        networkInputBytesPerSec: 12450 * 64,
-        networkOutputBytesPerSec: 12450 * 128,
-        p99LatencyMs: 0.85,
+        expiredKeysPerSec: 0,
+        networkInputBytesPerSec: 0,
+        networkOutputBytesPerSec: 0,
+        p99LatencyMs: null,
       }
     );
   }
@@ -280,7 +282,7 @@ export class MetricsSampler {
     return result;
   }
 
-  public getHistory(range: '15m' | '1h' | '6h' | '24h' = '1h'): MetricSample[] {
+  public getHistory(range: '15m' | '1h' | '6h' | '24h' = '1h', previous = false): MetricSample[] {
     const now = Date.now();
     let windowMs = 3600000;
     if (range === '15m') windowMs = 15 * 60 * 1000;
@@ -288,22 +290,25 @@ export class MetricsSampler {
     else if (range === '6h') windowMs = 6 * 3600000;
     else if (range === '24h') windowMs = 24 * 3600000;
 
-    const cutoff = now - windowMs;
-
-    if (range === '15m') {
-      const filtered = this.recent1sSamples.filter((s) => s.timestamp >= cutoff);
-      return this.downsample(filtered.length > 0 ? filtered : this.recent1sSamples, 180);
+    const end = now - (previous ? windowMs : 0);
+    const cutoff = end - windowMs;
+    // Merge the current tail so new gateways do not display an empty chart
+    // until the fifth sample. Never return expired samples outside the window.
+    const points = new Map<number, MetricSample>();
+    for (const sample of [...this.history5sSamples, ...this.recent1sSamples]) {
+      if (sample.timestamp >= cutoff && sample.timestamp <= end) points.set(sample.timestamp, sample);
     }
-
-    const filtered = this.history5sSamples.filter((s) => s.timestamp >= cutoff);
-    const source = filtered.length > 0 ? filtered : this.history5sSamples;
-    return this.downsample(source, 240);
+    return this.downsample([...points.values()].sort((a, b) => a.timestamp - b.timestamp), 240);
   }
 
   public async getHealthSummary(): Promise<HealthSummary> {
     const latest = this.getLatestSample();
     const info = await this.client.getInfo().catch(() => null);
     const issues: HealthIssue[] = [];
+    if (!info) {
+      const issue: HealthIssue = { id: 'engine_unavailable', severity: 'critical', title: 'Engine unavailable', description: 'Live engine readings could not be collected. Displayed readings may be stale.', fixSuggestion: 'Check the engine process and configured connection.', deepLink: '/dashboard' };
+      return { status: 'critical', topIssue: issue, thingsToLookAt: [issue], checkedAt: new Date().toISOString() };
+    }
 
     // Rule 1: Memory > 85% of maxmemory
     if (latest.memoryPercent >= 85) {
@@ -343,7 +348,7 @@ export class MetricsSampler {
     }
 
     // Rule 4: Rejected connections > 0
-    if (this.simulatedCondition === 'rejected_clients') {
+    if ((info.stats.rejected_connections ?? 0) > 0 || this.simulatedCondition === 'rejected_clients') {
       issues.push({
         id: 'rejected_clients',
         severity: 'critical',
@@ -355,7 +360,7 @@ export class MetricsSampler {
     }
 
     // Rule 5: Last save failed
-    if (info && info.persistence.rdb_last_bgsave_status !== 'ok') {
+    if (info && info.persistence.rdb_last_bgsave_status === 'err') {
       issues.push({
         id: 'save_failed',
         severity: 'critical',

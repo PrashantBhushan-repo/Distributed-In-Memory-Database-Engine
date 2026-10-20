@@ -4,6 +4,8 @@
 
 #include <cctype>
 #include <string>
+#include <stdexcept>
+#include "redisx/commands/keys.h"
 
 namespace redisx::commands {
 
@@ -21,6 +23,12 @@ std::string to_lower(std::string_view sv) {
 } // namespace
 
 Dispatcher::Dispatcher() = default;
+std::vector<CommandSpec> Dispatcher::command_specs() const {
+    std::vector<CommandSpec> specs;
+    for (const auto &[name, spec] : commands_) { (void)name; specs.push_back(spec); }
+    std::sort(specs.begin(), specs.end(), [](const auto &a, const auto &b) { return a.name < b.name; });
+    return specs;
+}
 
 void Dispatcher::register_command(CommandSpec spec) {
     std::string key = spec.name;
@@ -91,6 +99,10 @@ void Dispatcher::dispatch(
         return;
     }
 
+    if (!db::TTLManager::loading_aof && (spec->flags & CMD_FLAG_WRITE) && write_guard_ && !write_guard_()) {
+        proto::RespWriter::write_error(out_buf, "MISCONF Append-only persistence failed; writes are disabled"); return;
+    }
+
     // Pre-command memory check & eviction
     if (evict_mgr != nullptr && ttl_mgr != nullptr) {
         if (evict_mgr->maxmemory() > 0) {
@@ -103,8 +115,31 @@ void Dispatcher::dispatch(
         }
     }
 
-    // Execute command handler
-    spec->handler(cmd, keyspace, db_idx, out_buf, out_db_idx);
+    if (ttl_mgr != nullptr) ttl_mgr->attach(keyspace);
+
+    bool set_condition_failed = false;
+    if (name_upper == "SET" && cmd.arg_count() > 3) {
+        const bool exists = keyspace.db_exists(db_idx, cmd.arg(1));
+        for (std::size_t i = 3; i < cmd.arg_count(); ++i) {
+            const auto option = to_lower(cmd.arg(i));
+            if ((option == "nx" && exists) || (option == "xx" && !exists)) set_condition_failed = true;
+            if (option == "ex" || option == "px" || option == "exat" || option == "pxat") ++i;
+        }
+    }
+    // Use a dedicated reply buffer so failure/parking markers cannot consume earlier pipelined replies.
+    core::Buffer reply;
+    try { spec->handler(cmd, keyspace, db_idx, reply, out_db_idx); }
+    catch (const std::invalid_argument &) { proto::RespWriter::write_error(out_buf, "ERR value is not a valid number"); return; }
+    catch (const std::out_of_range &) { proto::RespWriter::write_error(out_buf, "ERR value is out of range"); return; }
+    for (const auto index : command_key_indices(cmd)) keyspace.get_db(db_idx).update_accounting(cmd.arg(index));
+    const auto response = reply.peek_string_view();
+    if (!db::TTLManager::loading_aof && write_observer_ && !set_condition_failed && (spec->flags & CMD_FLAG_WRITE) && !response.empty() &&
+        response.front() != '-' && !response.starts_with("+PARK_") &&
+        !write_observer_(cmd, keyspace, db_idx, response)) {
+        proto::RespWriter::write_error(out_buf, "MISCONF Append-only persistence failed; writes are disabled");
+        return;
+    }
+    out_buf.append(response);
 }
 
 } // namespace redisx::commands

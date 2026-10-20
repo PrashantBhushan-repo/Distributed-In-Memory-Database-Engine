@@ -63,8 +63,9 @@ export const LearnCommandsPage: React.FC = () => {
           if (cmdRes.status === 'fulfilled' && Array.isArray(cmdRes.value)) {
             setCommands(cmdRes.value);
           }
-          if (capRes.status === 'fulfilled' && capRes.value?.commands) {
-            setCapabilities(capRes.value.commands);
+          if (capRes.status === 'fulfilled' && Array.isArray(capRes.value?.capabilities)) {
+            const supported = new Set<string>(capRes.value.capabilities);
+            setCapabilities(Object.fromEntries((COMMAND_META_FALLBACK as CommandMeta[]).map(command => [command.name.toUpperCase(), supported.has(command.name.toUpperCase())])));
           }
         }
       } catch (err) {

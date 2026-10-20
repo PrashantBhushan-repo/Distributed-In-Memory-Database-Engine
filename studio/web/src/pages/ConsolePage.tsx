@@ -22,6 +22,8 @@ import { HistorySearchModal } from '../features/console/HistorySearchModal';
 import { DangerConfirmModal } from '../features/console/DangerConfirmModal';
 import { ConsoleTerminal } from '../features/console/ConsoleTerminal';
 import { registerPaletteItems } from '../components/CommandPalette';
+import { getDisplayHost } from '../utils/host';
+import { useMetrics } from '../features/metrics/MetricsContext';
 
 const WRITE_COMMAND_NAMES = new Set([
   'SET', 'SETNX', 'MSET', 'MSETNX', 'GETSET', 'APPEND', 'INCR', 'DECR', 'INCRBY', 'DECRBY',
@@ -34,6 +36,7 @@ const WRITE_COMMAND_NAMES = new Set([
 ]);
 
 export const ConsolePage: React.FC = () => {
+  const { engine } = useMetrics();
   // Command dictionary
   const [commands, setCommands] = useState<CommandMeta[]>([]);
   const [commandsLoading, setCommandsLoading] = useState(true);
@@ -60,7 +63,7 @@ export const ConsolePage: React.FC = () => {
 
   // User context / Role
   const [userRole, setUserRole] = useState<'admin' | 'operator' | 'viewer'>('admin');
-  const [activeDb, setActiveDb] = useState(0);
+  const [activeDb, setActiveDb] = useState(() => Number(localStorage.getItem('redisx_db') ?? 0));
 
   const outputEndRef = useRef<HTMLDivElement>(null);
 
@@ -443,7 +446,7 @@ export const ConsolePage: React.FC = () => {
                 Interactive Console
               </h1>
               <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-emerald-400 border border-slate-700">
-                127.0.0.1:6379[db{activeDb}]
+                {engine ? `${engine.host}:${engine.port}` : 'Connecting'}[db{activeDb}]
               </span>
               <span
                 className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase border flex items-center gap-1 ${
@@ -598,6 +601,8 @@ export const ConsolePage: React.FC = () => {
             <ConsoleTerminal
               commands={commands}
               dbIndex={activeDb}
+              serverHost={engine?.host ?? 'Connecting'}
+              serverPort={engine?.port}
               initialValue={terminalInputValue}
               isExecuting={isExecuting}
               onExecute={handleExecute}

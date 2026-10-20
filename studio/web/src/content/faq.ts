@@ -1,0 +1,8 @@
+export const faq = [
+  { question: 'What is pbredisdb?', answer: 'A Redis-compatible in-memory database written in C++20, paired with RedisX Studio: a web interface for exploring data, inspecting runtime behavior, and learning how the engine works.' },
+  { question: 'Does it work with Redis clients?', answer: 'The engine implements the Redis wire protocol and a subset of commands. Compatibility varies by client and workload. Check the compatibility tests; this page does not claim a client is verified without a recorded test result.' },
+  { question: 'Is it production-ready?', answer: 'Treat this as a learning and portfolio-grade implementation. Use a mature database for critical production workloads unless you have independently validated its behavior and operational requirements.' },
+  { question: 'How is data kept safe?', answer: 'The project includes snapshots, an append log, replication, and a gateway safety layer. These mechanisms have configuration and recovery tradeoffs. Read the tests, keep backups, and validate recovery before trusting important data to it.' },
+  { question: 'What is not implemented?', answer: 'Redis Cluster, embedded Lua scripting, and dynamic modules are outside the documented scope. Streams compatibility is not verified here. This is not a drop-in replacement for every Redis workload.' },
+  { question: 'How do I run it?', answer: 'Use the browser-local preview for a quick look. For the full project, clone the repository and follow the Docker Compose or Linux / WSL source-build instructions. The README explains how to launch the gateway and Studio.' },
+];

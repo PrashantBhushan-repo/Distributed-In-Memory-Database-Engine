@@ -5,6 +5,7 @@
 #include "redisx/core/time.h"
 
 #include <functional>
+#include <atomic>
 #include <map>
 #include <memory>
 #include <vector>
@@ -93,7 +94,7 @@ class EventLoop {
     void process_deferred();
 
     int epoll_fd_{-1};
-    bool running_{false};
+    std::atomic<bool> running_{false};
     std::shared_ptr<core::ITimeProvider> time_provider_;
     std::vector<struct epoll_event> epoll_events_;
 

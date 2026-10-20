@@ -1,8 +1,17 @@
 #include "redisx/types/skiplist.h"
 
 #include <cmath>
+#include <stdexcept>
 
 namespace redisx::types {
+size_t Skiplist::memory_usage() const {
+    size_t bytes = dict_.bucket_count() * sizeof(void *);
+    for (auto *node = header_; node; node = node->level[0].forward)
+        bytes += sizeof(SkiplistNode) + node->level.capacity() * sizeof(SkiplistLevel) + node->member.capacity() + 1;
+    for (const auto &[key, score] : dict_) { (void)score; bytes += sizeof(decltype(dict_)::value_type) + 2 * sizeof(void *) + key.capacity() + 1; }
+    return bytes;
+}
+
 
 Skiplist::Skiplist() {
     header_ = new SkiplistNode(SKIPLIST_MAXLEVEL, 0, "");
@@ -14,7 +23,7 @@ Skiplist::Skiplist() {
 }
 
 Skiplist::~Skiplist() {
-    SkiplistNode *node = header_->level[0].forward;
+    SkiplistNode *node = header_ ? header_->level[0].forward : nullptr;
     while (node) {
         SkiplistNode *next = node->level[0].forward;
         delete node;
@@ -26,7 +35,7 @@ Skiplist::~Skiplist() {
 Skiplist::Skiplist(Skiplist &&other) noexcept
     : header_(other.header_), tail_(other.tail_), length_(other.length_),
       level_(other.level_), dict_(std::move(other.dict_)) {
-    other.header_ = new SkiplistNode(SKIPLIST_MAXLEVEL, 0, "");
+    other.header_ = nullptr;
     other.tail_ = nullptr;
     other.length_ = 0;
     other.level_ = 1;
@@ -34,7 +43,7 @@ Skiplist::Skiplist(Skiplist &&other) noexcept
 
 Skiplist &Skiplist::operator=(Skiplist &&other) noexcept {
     if (this != &other) {
-        SkiplistNode *node = header_->level[0].forward;
+        SkiplistNode *node = header_ ? header_->level[0].forward : nullptr;
         while (node) {
             SkiplistNode *next = node->level[0].forward;
             delete node;
@@ -48,7 +57,7 @@ Skiplist &Skiplist::operator=(Skiplist &&other) noexcept {
         level_ = other.level_;
         dict_ = std::move(other.dict_);
 
-        other.header_ = new SkiplistNode(SKIPLIST_MAXLEVEL, 0, "");
+        other.header_ = nullptr;
         other.tail_ = nullptr;
         other.length_ = 0;
         other.level_ = 1;
@@ -66,6 +75,8 @@ int Skiplist::random_level() {
 }
 
 bool Skiplist::insert(double score, std::string_view member) {
+    if (std::isnan(score)) throw std::invalid_argument("NaN score");
+    if (!header_) header_ = new SkiplistNode(SKIPLIST_MAXLEVEL, 0, "");
     std::string mem(member);
     auto dict_it = dict_.find(mem);
     if (dict_it != dict_.end()) {
@@ -129,6 +140,7 @@ bool Skiplist::insert(double score, std::string_view member) {
 }
 
 bool Skiplist::remove(double score, std::string_view member) {
+    if (!header_) return false;
     std::string mem(member);
     SkiplistNode *update[SKIPLIST_MAXLEVEL];
     SkiplistNode *x = header_;
@@ -179,6 +191,7 @@ std::optional<double> Skiplist::get_score(std::string_view member) const {
 }
 
 std::optional<size_t> Skiplist::get_rank(double score, std::string_view member) const {
+    if (!header_ || length_ == 0) return std::nullopt;
     std::string mem(member);
     SkiplistNode *x = header_;
     size_t rank = 0;
@@ -224,6 +237,7 @@ std::vector<std::pair<std::string, double>> Skiplist::range_by_score(
     size_t offset, size_t count) const {
 
     std::vector<std::pair<std::string, double>> result;
+    if (!header_ || length_ == 0) return result;
     SkiplistNode *x = header_;
 
     for (int i = level_ - 1; i >= 0; --i) {

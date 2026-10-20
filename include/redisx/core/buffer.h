@@ -1,6 +1,7 @@
 #ifndef REDISX_CORE_BUFFER_H
 #define REDISX_CORE_BUFFER_H
 
+#include <algorithm>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -88,6 +89,7 @@ class Buffer {
     void consume(size_t len) noexcept;
     void compact() noexcept;
     void clear() noexcept;
+    void truncate_readable(size_t bytes) noexcept { write_pos_ = read_pos_ + std::min(bytes, readable_bytes()); }
 
   private:
     std::vector<uint8_t> buf_;

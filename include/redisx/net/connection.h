@@ -4,6 +4,7 @@
 #include "redisx/core/buffer.h"
 #include "redisx/core/errors.h"
 #include "redisx/net/event_loop.h"
+#include "redisx/security/tls.h"
 
 #include <functional>
 #include <memory>
@@ -28,8 +29,17 @@ class Connection : public std::enable_shared_from_this<Connection> {
     Connection(const Connection &) = delete;
     Connection &operator=(const Connection &) = delete;
 
+    void set_transport(std::unique_ptr<security::Transport> transport) { transport_ = std::move(transport); }
     void start();
     void close();
+    void close_after_flush();
+    std::uint64_t last_activity_ms{0};
+    [[nodiscard]] bool is_read_paused() const { return read_paused_; }
+    std::string client_name;
+    std::size_t selected_db{0};
+    [[nodiscard]] std::string peer_address() const;
+    void pause_reading();
+    void resume_reading();
 
     // Data send API
     void send(const void *data, size_t len);
@@ -42,6 +52,7 @@ class Connection : public std::enable_shared_from_this<Connection> {
     [[nodiscard]] core::Buffer &out_buffer() noexcept { return out_buf_; }
 
     void set_data_callback(DataCallback cb) { on_data_ = std::move(cb); }
+    void clear_close_callback() { on_close_ = nullptr; }
     void set_close_callback(CloseCallback cb) {
         if (on_close_) {
             auto prev = std::move(on_close_);
@@ -72,6 +83,9 @@ class Connection : public std::enable_shared_from_this<Connection> {
 
     uint32_t registered_events_{0};
     bool is_closed_{false};
+    bool read_paused_{false};
+    std::unique_ptr<security::Transport> transport_;
+    std::size_t pending_write_size_{0};
 };
 
 } // namespace redisx::net

@@ -1,22 +1,6 @@
-# RedisX Stage 11 — Testing, Fuzzing & Failure Injection Report
+# Engine validation
 
-This document records the empirical verification strategy, differential testing methodology, fault injection framework, and documented behavioral boundaries for **RedisX (`pbRedisDB`)**.
-
----
-
-## 📊 Testing Verification Summary
-
-| Test Category | Target Suite / Files | Count / Scale | Verification Objective | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Unit Tests** | `tests/unit/*.cpp` | 41 Tests | Core protocol, memory tracking, dynamic dictionary, skip lists, TTL cycles, RDB snapshot encoding. | ✅ PASSED |
-| **Integration Tests** | `tests/integration/*.cpp` | 19 Tests | Network socket event loop, multi-client echo, PSYNC replication stream, transactions (`WATCH`/`MULTI`/`EXEC`), Pub/Sub, ACL & slowlog. | ✅ PASSED |
-| **Differential Property Tests** | `tests/property/invariants.cpp` | 1,000+ Random ops | Invariant testing against in-memory reference model (`ReferenceModel`) using std::map/deque/set. Seeds and shrinks counterexamples. | ✅ PASSED |
-| **Chaos & Fault Injection** | `tests/integration/chaos_test.cpp` | Multi-node cluster | Primary + 2 Replicas harness. Injects disk errors (`aof_write`, `fsync`), link drops, and verified crash recovery without lost acknowledged writes. | ✅ PASSED |
-| **Whole-Path Command Fuzzing** | `tests/fuzz/command_fuzz.cpp` | Continuous stream | Random bytes at the network/buffer layer fed through `RespReader::parse` and `Dispatcher::dispatch` under ASan+UBSan. | ✅ PASSED |
-| **Real Client Compatibility** | `tests/compat/run_real_clients.py` | Python suite | Native Python RESP client executing multi-type commands, transactions, and 1,000-command pipeline mass insertion (`redis-cli --pipe`). | ✅ PASSED |
-| **High-Performance Loadgen** | `tools/loadgen.cpp` | 50,000 requests | Multi-threaded client concurrency measuring $p_{50}, p_{90}, p_{99}$ latency distributions and throughput. | ✅ PASSED |
-
----
+See [engine-audit.md](engine-audit.md) for the current stage-by-stage audit and exact executed checks. Historical claims below predate the audit; the C++ chaos harness simulates replication in process and is not evidence of a multi-process cluster run. `run_real_clients.py` is a socket smoke test; `real_client_audit.py` invokes actual client libraries/tools. Sanitizer and fuzz results apply only to the audited build and exercised inputs.
 
 ## 🔬 In-Depth Engineering Highlights
 

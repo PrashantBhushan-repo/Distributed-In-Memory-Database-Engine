@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <sstream>
+#include <sys/utsname.h>
+#include <unistd.h>
 
 namespace redisx::obs {
 
@@ -30,9 +32,10 @@ std::string InfoProvider::generate_info(
         ss << "# Server\r\n";
         ss << "redis_version:0.1.0\r\n";
         ss << "redis_mode:standalone\r\n";
-        ss << "os:Linux/Windows\r\n";
-        ss << "arch_bits:64\r\n";
-        ss << "process_id:1234\r\n";
+        struct utsname system{}; ::uname(&system);
+        ss << "os:" << system.sysname << " " << system.release << "\r\n";
+        ss << "arch_bits:" << sizeof(void *) * 8 << "\r\n";
+        ss << "process_id:" << ::getpid() << "\r\n";
         ss << "tcp_port:" << config_mgr.get_int("port", 6379) << "\r\n";
         ss << "uptime_in_seconds:" << uptime_sec << "\r\n";
         ss << "uptime_in_days:" << (uptime_sec / 86400) << "\r\n\r\n";
@@ -51,7 +54,7 @@ std::string InfoProvider::generate_info(
         ss << "# Memory\r\n";
         ss << "used_memory:" << used << "\r\n";
         ss << "used_memory_human:" << (used / 1024) << "K\r\n";
-        ss << "used_memory_peak:" << used << "\r\n";
+        ss << "used_memory_peak:" << memory::MemoryTracker::instance().peak_memory() << "\r\n";
         ss << "maxmemory:" << maxmem << "\r\n";
         ss << "maxmemory_policy:" << config_mgr.get_string("maxmemory-policy", "noeviction") << "\r\n\r\n";
     }
@@ -59,7 +62,7 @@ std::string InfoProvider::generate_info(
     if (sec == "all" || sec == "persistence" || sec == "default") {
         ss << "# Persistence\r\n";
         ss << "loading:0\r\n";
-        ss << "rdb_last_save_time:" << (core::wall_now_ms() / 1000) << "\r\n";
+        ss << "rdb_last_save_time:" << stats.last_save_time << "\r\n";
         ss << "aof_enabled:" << (config_mgr.get_bool("appendonly", false) ? 1 : 0) << "\r\n\r\n";
     }
 
@@ -67,7 +70,7 @@ std::string InfoProvider::generate_info(
         ss << "# Stats\r\n";
         ss << "total_connections_received:" << stats.total_connections_received << "\r\n";
         ss << "total_commands_processed:" << stats.total_commands_processed << "\r\n";
-        ss << "instantaneous_ops_per_sec:0\r\n";
+        ss << "instantaneous_ops_per_sec:" << stats.ops_per_second << "\r\n";
         ss << "rejected_connections:" << stats.rejected_connections << "\r\n";
         ss << "expired_keys:" << stats.expired_keys << "\r\n";
         ss << "evicted_keys:" << stats.evicted_keys << "\r\n";
@@ -96,7 +99,14 @@ std::string InfoProvider::generate_info(
         for (std::size_t i = 0; i < db::Keyspace::NUM_DATABASES; ++i) {
             std::size_t sz = keyspace.db_size(i);
             if (sz > 0) {
-                ss << "db" << i << ":keys=" << sz << ",expires=0,avg_ttl=0\r\n";
+                std::size_t expires = 0;
+                std::uint64_t ttl_sum = 0;
+                const auto now = core::wall_now_ms();
+                std::uint64_t cursor = 0;
+                do { cursor = keyspace.get_db(i).scan(cursor, [&](const db::Entry *entry) {
+                    if (entry->expire_at_ms) { ++expires; if (entry->expire_at_ms > now) ttl_sum += entry->expire_at_ms - now; }
+                }); } while (cursor);
+                ss << "db" << i << ":keys=" << sz << ",expires=" << expires << ",avg_ttl=" << (expires ? ttl_sum / expires : 0) << "\r\n";
             }
         }
     }

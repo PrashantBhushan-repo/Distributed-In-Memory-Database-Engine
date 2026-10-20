@@ -89,6 +89,7 @@ class RespServerIntegrationTest : public ::testing::Test {
         });
 
         ASSERT_TRUE(listener_->start().has_value());
+        port_ = listener_->port();
 
         server_thread_ = std::thread([this]() { server_loop_->run(); });
 
@@ -105,7 +106,7 @@ class RespServerIntegrationTest : public ::testing::Test {
         listener_->stop();
     }
 
-    std::uint16_t port_{6481};
+    std::uint16_t port_{0};
     std::unique_ptr<EventLoop> server_loop_;
     std::unique_ptr<Listener> listener_;
     std::thread server_thread_;

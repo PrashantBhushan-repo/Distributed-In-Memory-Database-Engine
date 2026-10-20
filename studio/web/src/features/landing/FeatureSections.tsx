@@ -1,0 +1,17 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Check, LockKeyhole, Shield, GitBranch, Database, Save, FileText, Play } from 'lucide-react';
+import { features, visualCopy } from '../../content/features';
+import { CommandChip } from '../../components/CommandChip';
+
+export function FeatureSections() {
+  return <div className="lp-features" id="features">{features.map((feature, index) => <section key={feature.id} className={`lp-feature ${index % 2 ? 'lp-feature-reverse' : ''}`} id={feature.id === 'learning' ? 'learn' : undefined}>
+    <div className="lp-feature-copy"><p className="lp-eyebrow">{feature.eyebrow}</p><h2>{feature.title}<br /><em>{feature.emphasis}</em></h2><p>{feature.text}</p><Link className="lp-text-link" to={feature.link}>{feature.action}<ArrowRight size={16} /></Link><dl className="lp-benefits">{feature.benefits.map(([title, description]) => <div key={title}><dt><Check size={13} />{title}</dt><dd>{description}</dd></div>)}</dl></div>
+    <div className={`lp-feature-visual lp-visual-${feature.id}`} role="group" aria-label={visualCopy[feature.id].title}>
+      {feature.id === 'engine' && <><div className="lp-mini-bar"><span>{visualCopy.engine.title}</span><span className="lp-mini-badge">{visualCopy.engine.badge}</span></div><div className="lp-encoding"><code>{visualCopy.engine.key}</code><div className="lp-encoding-label">{visualCopy.engine.from}<ArrowRight size={16} />{visualCopy.engine.to}</div><div className="lp-packed-nodes">{visualCopy.engine.values.map((value) => <React.Fragment key={value}><div><span>{value}</span><i /><i /></div><ArrowRight className="lp-node-arrow" size={20} /></React.Fragment>)}</div><p>{visualCopy.engine.foot}</p></div></>}
+      {feature.id === 'safety' && <><div className="lp-mini-bar"><span><Shield size={14} />{visualCopy.safety.title}</span><span className="lp-mini-badge">{visualCopy.safety.badge}</span></div><div className="lp-safety-lock"><LockKeyhole size={29} /><code>{visualCopy.safety.command}</code><strong>{visualCopy.safety.result}</strong><p>{visualCopy.safety.note}</p></div><div className="lp-role-table">{visualCopy.safety.roles.map((role, i) => <div key={role}><span>{role}</span><span>{visualCopy.safety.permission[i]}</span></div>)}</div></>}
+      {feature.id === 'recovery' && <><div className="lp-mini-bar"><span>{visualCopy.recovery.title}</span><GitBranch size={15} /></div><div className="lp-write-path"><CommandChip command={visualCopy.recovery.command} /><div className="lp-storage-node"><Database size={20} /><span>{visualCopy.recovery.nodes[0]}</span></div><div className="lp-durability-nodes">{[Save, FileText, GitBranch].map((Icon, i) => <div key={i}><Icon size={20} /><span>{visualCopy.recovery.nodes[i + 1]}</span></div>)}</div><p>{visualCopy.recovery.foot}</p></div></>}
+      {feature.id === 'learning' && <><div className="lp-mini-bar"><span>{visualCopy.learning.title}</span><span className="lp-mini-badge">{visualCopy.learning.badge}</span></div><div className="lp-lab"><CommandChip command={visualCopy.learning.command} /><ol>{visualCopy.learning.steps.map((step, i) => <li key={step}><span className={i < 2 ? 'is-complete' : ''}>{i < 2 ? <Check size={12} /> : <span aria-hidden="true">·</span>}</span>{step}</li>)}</ol><Link to="/learn/labs"><Play size={13} />{visualCopy.learning.action}<ArrowRight size={15} /></Link></div></>}
+    </div>
+  </section>)}</div>;
+}

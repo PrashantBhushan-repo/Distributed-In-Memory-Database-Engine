@@ -4,6 +4,7 @@
 #include "redisx/security/auth.h"
 
 #include <algorithm>
+#include "redisx/commands/keys.h"
 
 namespace redisx::security {
 
@@ -42,23 +43,22 @@ std::vector<std::string> AclEngine::list_users() const {
 }
 
 std::vector<std::string> AclEngine::list_categories() const {
-    return {"read", "write", "admin", "dangerous", "pubsub", "fast", "slow", "all"};
+    return {"read", "write", "admin", "dangerous", "pubsub", "all"};
 }
 
 bool AclEngine::set_user_rules(const std::string &username, const std::vector<std::string> &rules, std::string &err_msg) {
-    auto it = users_.find(username);
-    if (it == users_.end()) {
-        User u;
-        u.name = username;
-        u.enabled = true;
-        u.nopass = true;
-        u.category_mask = CMD_CAT_NONE;
-        users_[username] = u;
-    }
-    User &u = users_[username];
-
+    const auto it = users_.find(username);
+    User u = it == users_.end() ? User{} : it->second;
+    u.name = username;
     for (const auto &rule : rules) {
-        if (rule == "on") {
+        if (rule == "reset") { u = User{}; u.name = username; }
+        else if (rule == "resetpass") { u.nopass = false; u.password_hashes.clear(); }
+        else if (rule == "resetkeys") u.key_patterns.clear();
+        else if (rule == "resetchannels") u.channel_patterns.clear();
+        else if (rule == "allkeys") u.key_patterns = {"*"};
+        else if (rule == "allchannels") u.channel_patterns = {"*"};
+        else if (rule == "+@pubsub" || rule == "-@pubsub") {}
+        else if (rule == "on") {
             u.enabled = true;
         } else if (rule == "off") {
             u.enabled = false;
@@ -93,6 +93,8 @@ bool AclEngine::set_user_rules(const std::string &username, const std::vector<st
             u.category_mask |= CMD_CAT_DANGEROUS;
         } else if (rule == "-@dangerous") {
             u.category_mask &= ~CMD_CAT_DANGEROUS;
+        } else if (rule.starts_with("+@") || rule.starts_with("-@")) {
+            err_msg = "ERR Unsupported ACL category"; return false;
         } else if (rule.rfind("+", 0) == 0) {
             std::string c = rule.substr(1);
             std::transform(c.begin(), c.end(), c.begin(), ::toupper);
@@ -107,8 +109,20 @@ bool AclEngine::set_user_rules(const std::string &username, const std::vector<st
             err_msg = "ERR Unrecognized ACL rule '" + rule + "'";
             return false;
         }
+        if (rule.starts_with('+') || rule.starts_with('-')) u.permission_rules.push_back(rule);
     }
+    users_[username] = std::move(u);
     return true;
+}
+
+bool AclEngine::authenticate(const std::string &username, std::string_view password) const {
+    const auto *user = get_user(username);
+    if (!user || !user->enabled) return false;
+    if (user->nopass) return true;
+    const auto hash = sha256_hex(password);
+    bool valid = false;
+    for (const auto &candidate : user->password_hashes) valid |= constant_time_equals(hash, candidate);
+    return valid;
 }
 
 bool AclEngine::check_permission(
@@ -120,33 +134,34 @@ bool AclEngine::check_permission(
 
     std::string name = cmd.name_upper();
 
-    if (user.disabled_commands.count(name)) return false;
-
-    if (user.allowed_commands.count(name)) {
-        // Explicitly allowed
-    } else {
-        std::uint32_t cmd_cat = CMD_CAT_READ;
-        if (spec) {
-            if (spec->flags & commands::CMD_FLAG_ADMIN) cmd_cat = CMD_CAT_ADMIN | CMD_CAT_DANGEROUS;
-            else if (spec->flags & commands::CMD_FLAG_WRITE) cmd_cat = CMD_CAT_WRITE;
-        }
-
-        if ((user.category_mask & cmd_cat) == 0) {
-            return false;
-        }
+    std::uint32_t category = CMD_CAT_READ;
+    if (spec && (spec->flags & commands::CMD_FLAG_ADMIN)) category = CMD_CAT_ADMIN | CMD_CAT_DANGEROUS;
+    else if (spec && (spec->flags & commands::CMD_FLAG_WRITE)) category = CMD_CAT_WRITE;
+    const bool channel_cmd = name == "SUBSCRIBE" || name == "PSUBSCRIBE" || name == "UNSUBSCRIBE" || name == "PUNSUBSCRIBE" || name == "PUBLISH" || name == "PUBSUB";
+    if (channel_cmd) category = CMD_CAT_PUBSUB;
+    bool allowed = (user.category_mask & category) != 0;
+    for (const auto &rule : user.permission_rules) {
+        std::string target = rule.substr(1);
+        std::transform(target.begin(), target.end(), target.begin(), ::toupper);
+        bool matches = target == name || target == "@ALL";
+        if (target == "@READ") matches = category & CMD_CAT_READ;
+        if (target == "@WRITE") matches = category & CMD_CAT_WRITE;
+        if (target == "@ADMIN") matches = category & CMD_CAT_ADMIN;
+        if (target == "@DANGEROUS") matches = category & CMD_CAT_DANGEROUS;
+        if (target == "@PUBSUB") matches = category & CMD_CAT_PUBSUB;
+        if (matches) allowed = rule.front() == '+';
     }
-
-    // Key pattern checks
-    if (!user.key_patterns.empty() && cmd.arg_count() >= 2) {
-        std::string key = cmd.arg(1);
-        bool matched = false;
-        for (const auto &pat : user.key_patterns) {
-            if (pat == "*" || commands::string_match_glob(pat, key)) {
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) return false;
+    if (!allowed) return false;
+    auto matches = [](const auto &patterns, const std::string &value) {
+        for (const auto &pattern : patterns) if (commands::string_match_glob(pattern, value)) return true;
+        return false;
+    };
+    for (const auto index : commands::command_key_indices(cmd)) {
+        if (!matches(user.key_patterns, cmd.arg(index))) return false;
+    }
+    if (channel_cmd && name != "PUBSUB") {
+        const auto end = name == "PUBLISH" ? std::min<std::size_t>(2, cmd.arg_count()) : cmd.arg_count();
+        for (std::size_t i = 1; i < end; ++i) if (!matches(user.channel_patterns, cmd.arg(i))) return false;
     }
 
     return true;

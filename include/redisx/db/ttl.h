@@ -5,6 +5,8 @@
 #include "redisx/db/keyspace.h"
 
 #include <cstddef>
+#include <array>
+#include <functional>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -23,11 +25,20 @@ class TTLManager {
 
     ~TTLManager() = default;
 
+    void attach(Keyspace &keyspace) {
+        keyspace.set_expiration_check([this, &keyspace](std::size_t db, std::string_view key) {
+            return expire_if_needed(keyspace, db, key);
+        });
+    }
+
+    void set_expire_callback(std::function<void(std::size_t, const std::string &)> callback) { on_expire_ = std::move(callback); }
+    inline static thread_local bool loading_aof = false;
     // Time Provider API
     void set_time_provider(std::shared_ptr<core::ITimeProvider> provider) noexcept {
         time_provider_ = std::move(provider);
     }
     [[nodiscard]] core::ITimeProvider &time_provider() const noexcept {
+        if (loading_aof) { static core::MockTimeProvider replay_time(0); return replay_time; }
         return *time_provider_;
     }
 
@@ -63,6 +74,8 @@ class TTLManager {
     std::shared_ptr<core::ITimeProvider> time_provider_;
     bool replica_mode_{false};
     ExpireStats stats_;
+    std::array<std::uint64_t, Keyspace::NUM_DATABASES> cursors_{};
+    std::function<void(std::size_t, const std::string &)> on_expire_;
 };
 
 } // namespace redisx::db

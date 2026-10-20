@@ -2,8 +2,12 @@
 #include "redisx/core/fault_injection.h"
 #include "redisx/core/logging.h"
 #include "redisx/core/time.h"
+#include "redisx/core/file_io.h"
+#include <charconv>
 
 #include <cstdio>
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 
@@ -29,72 +33,93 @@ static std::string format_resp_cmd(const std::vector<std::string> &args) {
     return res;
 }
 
+namespace {
+bool write_all(int fd, std::string_view bytes) {
+    while (!bytes.empty()) {
+        const auto written = ::write(fd, bytes.data(), bytes.size());
+        if (written < 0 && errno == EINTR) continue;
+        if (written <= 0) return false;
+        bytes.remove_prefix(static_cast<std::size_t>(written));
+    }
+    return true;
+}
+}
+
 bool AofManager::open(const std::string &filepath, FsyncPolicy policy) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (fd_ >= 0) ::close(fd_);
     filepath_ = filepath;
     policy_ = policy;
-    out_.open(filepath_, std::ios::app | std::ios::binary);
-    if (!out_.is_open()) {
-        REDISX_LOG_ERROR("Failed to open AOF file: %s", filepath_.c_str());
-        return false;
+    fd_ = ::open(filepath.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+    if (fd_ < 0) {
+        const int open_error = errno;
+        REDISX_LOG_ERROR("Cannot open AOF '%s' for writing: %s (errno=%d)",
+                         filepath.c_str(), std::strerror(open_error), open_error);
     }
-    is_open_ = true;
-    return true;
+    is_open_ = fd_ >= 0;
+    healthy_ = is_open_;
+    current_db_ = db::Keyspace::NUM_DATABASES;
+    return is_open_;
 }
 
 void AofManager::close() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (is_open_) {
-        out_.flush();
-        out_.close();
-        is_open_ = false;
-    }
+    if (fd_ >= 0) { core::sync_fd(fd_); ::close(fd_); }
+    fd_ = -1;
+    is_open_ = false;
 }
 
-void AofManager::append_command(std::size_t db_idx, const std::vector<std::string> &args) {
-    if (!is_open_ || args.empty()) return;
-    if (FAILPOINT("aof_write")) {
-        REDISX_LOG_WARN("Injected failure at failpoint 'aof_write'");
-        return;
-    }
-
+bool AofManager::append_command(std::size_t db_idx, const std::vector<std::string> &args) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_open_ || !healthy_ || args.empty()) return false;
     std::string payload;
-
-    if (db_idx != current_db_) {
-        current_db_ = db_idx;
-        payload += format_resp_cmd({"SELECT", std::to_string(db_idx)});
-    }
-
+    if (db_idx != current_db_) payload += format_resp_cmd({"SELECT", std::to_string(db_idx)});
     payload += format_resp_cmd(args);
-    out_.write(payload.data(), static_cast<std::streamsize>(payload.size()));
-
-    if (is_rewriting_) {
-        rewrite_buffer_ += payload;
-    }
-
-    if (policy_ == FsyncPolicy::Always) {
-        if (!FAILPOINT("fsync")) {
-            out_.flush();
+    const auto start = ::lseek(fd_, 0, SEEK_END);
+    if (FAILPOINT("aof_write") || !write_all(fd_, payload)) {
+        if (start >= 0 && ::ftruncate(fd_, start) != 0) {
+            ::close(fd_);
+            fd_ = -1;
+            is_open_ = false;
         }
+        healthy_ = false;
+        return false;
     }
+    if (policy_ == FsyncPolicy::Always && (FAILPOINT("fsync") || !core::sync_fd(fd_))) {
+        healthy_ = false;
+        return false;
+    }
+    current_db_ = db_idx;
+    if (is_rewriting_) rewrite_buffer_ += payload;
+    return true;
 }
 
-void AofManager::flush_and_fsync() {
-    if (FAILPOINT("fsync")) {
-        REDISX_LOG_WARN("Injected failure at failpoint 'fsync'");
-        return;
-    }
+bool AofManager::flush_and_fsync() {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (is_open_ && out_.is_open()) {
-        out_.flush();
+    if (!is_open_ || !healthy_) return false;
+    if (FAILPOINT("fsync") || !core::sync_fd(fd_)) { healthy_ = false; return false; }
+    return true;
+}
+
+bool AofManager::install_rewrite(const std::string &temporary_path) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    int replacement = ::open(temporary_path.c_str(), O_WRONLY | O_APPEND | O_CLOEXEC);
+    if (replacement < 0) return false;
+    const bool written = write_all(replacement, rewrite_buffer_) && core::sync_fd(replacement);
+    if (!written || ::rename(temporary_path.c_str(), filepath_.c_str()) != 0) {
+        ::close(replacement); return false;
     }
+    if (fd_ >= 0) ::close(fd_);
+    fd_ = replacement;
+    current_db_ = db::Keyspace::NUM_DATABASES;
+    rewrite_buffer_.clear(); is_rewriting_ = false; healthy_ = true;
+    return core::sync_parent_directory(filepath_);
 }
 
 void AofManager::start_rewrite_buffer() {
     std::lock_guard<std::mutex> lock(mutex_);
     is_rewriting_ = true;
-    rewrite_buffer_.clear();
+    rewrite_buffer_ = current_db_ < db::Keyspace::NUM_DATABASES ? format_resp_cmd({"SELECT", std::to_string(current_db_)}) : "";
 }
 
 void AofManager::stop_rewrite_buffer_and_append(std::ofstream &target_out) {
@@ -107,7 +132,9 @@ void AofManager::stop_rewrite_buffer_and_append(std::ofstream &target_out) {
 }
 
 bool AofManager::rewrite(const db::Keyspace &keyspace, const std::string &target_filepath) {
-    std::string tmp_filepath = target_filepath + ".tmp";
+    core::TemporaryFile temporary(target_filepath + ".tmp");
+    const auto &tmp_filepath = temporary.path();
+    if (tmp_filepath.empty()) return false;
     std::ofstream tmp_out(tmp_filepath, std::ios::binary | std::ios::out);
     if (!tmp_out.is_open()) {
         REDISX_LOG_ERROR("Failed to create AOF rewrite temp file: %s", tmp_filepath.c_str());
@@ -178,7 +205,9 @@ bool AofManager::rewrite(const db::Keyspace &keyspace, const std::string &target
                     if (!range.empty()) {
                         std::vector<std::string> args = {"ZADD", key};
                         for (const auto &[m, score] : range) {
-                            args.push_back(std::to_string(score));
+                            char buffer[128];
+                            const auto result = std::to_chars(buffer, buffer + sizeof(buffer), score, std::chars_format::general, std::numeric_limits<double>::max_digits10);
+                            args.emplace_back(buffer, result.ptr);
                             args.push_back(m);
                         }
                         std::string cmd = format_resp_cmd(args);
@@ -201,7 +230,9 @@ bool AofManager::rewrite(const db::Keyspace &keyspace, const std::string &target
     stop_rewrite_buffer_and_append(tmp_out);
 
     tmp_out.flush();
+    if (!tmp_out) return false;
     tmp_out.close();
+    if (!core::sync_file(tmp_filepath)) return false;
 
     close();
 
@@ -212,7 +243,7 @@ bool AofManager::rewrite(const db::Keyspace &keyspace, const std::string &target
         return false;
     }
 
-    return open(target_filepath, policy_);
+    return core::sync_parent_directory(target_filepath) && open(target_filepath, policy_);
 }
 
 } // namespace redisx::persistence

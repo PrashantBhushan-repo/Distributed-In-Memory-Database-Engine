@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { CommandMeta } from './types';
 import { loadConsoleHistory, saveConsoleHistory } from './commandUtils';
+import { getDisplayHostname } from '../../utils/host';
 
 interface ConsoleTerminalProps {
   commands: CommandMeta[];
@@ -32,7 +33,7 @@ interface ConsoleTerminalProps {
 export const ConsoleTerminal: React.FC<ConsoleTerminalProps> = ({
   commands,
   dbIndex,
-  serverHost = '127.0.0.1',
+  serverHost = getDisplayHostname(),
   serverPort = 6379,
   onExecute,
   onOpenExplain,

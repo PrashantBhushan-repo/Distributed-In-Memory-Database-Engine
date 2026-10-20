@@ -10,7 +10,7 @@
 
 namespace redisx::types {
 
-// Listpack is a compact, single-allocation contiguous byte array for small collections.
+// Listpack stores small collections in one contiguous byte buffer (RedisX internal format).
 // Elements can be stored as variable-length strings or encoded integers.
 class Listpack {
   public:
@@ -29,15 +29,18 @@ class Listpack {
     bool replace(size_t index, std::string_view elem);
 
     [[nodiscard]] std::optional<std::string> get(size_t index) const;
-    [[nodiscard]] size_t size() const noexcept { return elements_.size(); }
+    [[nodiscard]] size_t size() const noexcept { return count_; }
     [[nodiscard]] size_t bytes() const noexcept;
-    [[nodiscard]] bool empty() const noexcept { return elements_.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
 
-    [[nodiscard]] std::vector<std::string> to_vector() const { return elements_; }
-    void clear() { elements_.clear(); }
+    [[nodiscard]] std::vector<std::string> to_vector() const;
+    void clear() { data_.clear(); count_ = 0; }
 
   private:
-    std::vector<std::string> elements_;
+    std::vector<std::uint8_t> data_;
+    std::size_t count_{0};
+    [[nodiscard]] std::size_t offset(std::size_t index) const;
+    [[nodiscard]] std::pair<std::string, std::size_t> decode(std::size_t offset) const;
 };
 
 } // namespace redisx::types

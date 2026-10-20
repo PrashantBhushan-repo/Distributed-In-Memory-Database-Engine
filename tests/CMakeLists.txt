@@ -16,6 +16,7 @@ include(GoogleTest)
 # Unit Tests
 # ------------------------------------------------------------
 add_executable(unit_tests
+    unit/engine_audit_test.cpp
     unit/buffer_test.cpp
     unit/time_test.cpp
     unit/event_loop_test.cpp
@@ -112,3 +113,7 @@ if (REDISX_BUILD_FUZZERS)
     target_compile_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)
     target_link_options(resp_fuzz PRIVATE -fsanitize=fuzzer,address)
 endif()
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME ServerAudit COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/integration/server_audit.py $<TARGET_FILE:redisx>)
+set_tests_properties(ServerAudit PROPERTIES TIMEOUT 90 RUN_SERIAL TRUE)

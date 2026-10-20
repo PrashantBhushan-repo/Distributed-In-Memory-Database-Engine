@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <variant>
 
 namespace redisx::types {
 
@@ -30,15 +31,16 @@ class Intset {
     [[nodiscard]] bool contains(std::int64_t value) const;
 
     [[nodiscard]] std::optional<std::int64_t> get(size_t index) const;
-    [[nodiscard]] size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] size_t memory_usage() const { return std::visit([](const auto &values) { return values.capacity() * sizeof(typename std::decay_t<decltype(values)>::value_type); }, values_); }
+    [[nodiscard]] size_t size() const noexcept { return std::visit([](const auto &values) { return values.size(); }, values_); }
     [[nodiscard]] Encoding encoding() const noexcept { return encoding_; }
-    [[nodiscard]] const std::vector<std::int64_t> &values() const noexcept { return values_; }
+    [[nodiscard]] std::vector<std::int64_t> values() const;
 
     static bool is_valid_integer(const std::string &str, std::int64_t &out_val);
 
   private:
     Encoding encoding_{Encoding::Int16};
-    std::vector<std::int64_t> values_;
+    std::variant<std::vector<std::int16_t>, std::vector<std::int32_t>, std::vector<std::int64_t>> values_;
 
     void check_and_upgrade_encoding(std::int64_t value);
 };

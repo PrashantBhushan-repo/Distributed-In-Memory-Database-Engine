@@ -25,6 +25,7 @@ import LAB_3 from '../../../../packages/shared/labs/lab-3-trigger-eviction.json'
 import LAB_4 from '../../../../packages/shared/labs/lab-4-transactions-watch.json';
 import LAB_5 from '../../../../packages/shared/labs/lab-5-data-types.json';
 import LAB_6 from '../../../../packages/shared/labs/lab-6-replication-resync.json';
+import { ResetSandboxModal } from '../features/playground/ResetSandboxModal';
 
 interface LabStep {
   id: string;
@@ -65,6 +66,7 @@ const ALL_LABS: LabDefinition[] = [
 const LOCAL_STORAGE_KEY = 'pb_redis_labs_progress_v1';
 
 export const LearnLabsPage: React.FC = () => {
+  const [resetOpen, setResetOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const initialLabId = searchParams.get('lab') || ALL_LABS[0].id;
 
@@ -103,7 +105,7 @@ export const LearnLabsPage: React.FC = () => {
     fetch('/api/capabilities')
       .then((r) => r.json())
       .then((data) => {
-        if (data?.commands) setCapabilities(data.commands);
+        if (Array.isArray(data?.capabilities)) setCapabilities(Object.fromEntries(data.capabilities.map((command: string) => [command.toUpperCase(), true])));
       })
       .catch(() => {});
   }, []);
@@ -140,7 +142,7 @@ export const LearnLabsPage: React.FC = () => {
   // Check if required commands are supported by this server
   const unsupportedCommands = activeLab.requiredCommands.filter((cmd) => {
     if (Object.keys(capabilities).length === 0) return false;
-    return capabilities[cmd.toUpperCase()] === false;
+    return capabilities[cmd.toUpperCase()] !== true;
   });
 
   // Execute a command in sandbox DB 15
@@ -148,13 +150,14 @@ export const LearnLabsPage: React.FC = () => {
     setExecuting(true);
     setCheckStatus(null);
     try {
-      // In sandbox mode, send command to /api/v1/command with db=15
-      const res = await fetch('/api/v1/command', {
+      // In sandbox mode, send command to /api/playground/exec with db=15
+      const res = await fetch('/api/playground/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: rawCmd, db: 15, unlock: true }),
       });
       const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error ?? 'The sandbox command could not be executed.');
       setLastOutput(data.rawReply || JSON.stringify(data.reply));
 
       // Verify the check against sandbox DB 15
@@ -163,7 +166,7 @@ export const LearnLabsPage: React.FC = () => {
       setLastOutput(`Error: ${err.message || 'Network request failed'}`);
       setCheckStatus({
         passed: false,
-        message: 'Command execution failed. Please verify that the engine is running on port 6379.',
+        message: err.message || 'Command execution failed. Check the engine connection.',
       });
     } finally {
       setExecuting(false);
@@ -176,7 +179,7 @@ export const LearnLabsPage: React.FC = () => {
 
     try {
       if (expectedCheck.type === 'key_exists' && expectedCheck.key) {
-        const checkRes = await fetch('/api/v1/command', {
+        const checkRes = await fetch('/api/playground/exec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: `EXISTS ${expectedCheck.key}`, db: 15 }),
@@ -190,7 +193,7 @@ export const LearnLabsPage: React.FC = () => {
           setCheckStatus({ passed: false, message: `Key ${expectedCheck.key} was not found.` });
         }
       } else if (expectedCheck.type === 'key_not_exists' && expectedCheck.key) {
-        const checkRes = await fetch('/api/v1/command', {
+        const checkRes = await fetch('/api/playground/exec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: `EXISTS ${expectedCheck.key}`, db: 15 }),
@@ -204,7 +207,7 @@ export const LearnLabsPage: React.FC = () => {
           setCheckStatus({ passed: false, message: `Key ${expectedCheck.key} is still present in memory.` });
         }
       } else if (expectedCheck.type === 'key_type' && expectedCheck.key) {
-        const checkRes = await fetch('/api/v1/command', {
+        const checkRes = await fetch('/api/playground/exec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: `TYPE ${expectedCheck.key}`, db: 15 }),
@@ -218,7 +221,7 @@ export const LearnLabsPage: React.FC = () => {
           setCheckStatus({ passed: false, message: `Expected type '${expectedCheck.expectedType}', got '${actualType}'` });
         }
       } else if (expectedCheck.type === 'ttl_between' && expectedCheck.key) {
-        const checkRes = await fetch('/api/v1/command', {
+        const checkRes = await fetch('/api/playground/exec', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: `TTL ${expectedCheck.key}`, db: 15 }),
@@ -233,7 +236,7 @@ export const LearnLabsPage: React.FC = () => {
         }
       } else {
         // Default command success
-        if (!cmdResult.isError) {
+        if (cmdResult.success === true && !cmdResult.isError) {
           setCheckStatus({ passed: true, message: 'Command verified successfully!' });
           saveStepProgress(activeLab.id, activeStepIdx);
         } else {
@@ -241,8 +244,7 @@ export const LearnLabsPage: React.FC = () => {
         }
       }
     } catch {
-      setCheckStatus({ passed: true, message: 'Step verified successfully in sandbox mode.' });
-      saveStepProgress(activeLab.id, activeStepIdx);
+      setCheckStatus({ passed: false, message: 'Verification could not reach the engine. Retry this step after checking the connection.' });
     }
   };
 
@@ -257,15 +259,6 @@ export const LearnLabsPage: React.FC = () => {
   };
 
   const handleResetLab = async () => {
-    // Delete play:* keys in sandbox DB 15
-    try {
-      await fetch('/api/v1/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'FLUSHDB', db: 15, unlock: true }),
-      });
-    } catch {}
-
     const updated = { ...progress };
     delete updated[activeLab.id];
     setProgress(updated);
@@ -282,6 +275,7 @@ export const LearnLabsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      <ResetSandboxModal isOpen={resetOpen} onClose={() => setResetOpen(false)} onResetConfirmed={() => { void handleResetLab(); setResetOpen(false); }} />
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-800">
         <div>
@@ -296,12 +290,12 @@ export const LearnLabsPage: React.FC = () => {
             Guided Interactive Database Labs
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">
-            Hands-on guided walkthroughs executing directly in isolated Sandbox DB 15 with zero production risk.
+            Hands-on walkthroughs in sandbox database 15, restricted to play: keys.
           </p>
         </div>
 
         <button
-          onClick={handleResetLab}
+          onClick={() => setResetOpen(true)}
           className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition self-start md:self-auto"
         >
           <RotateCcw className="h-3.5 w-3.5" />

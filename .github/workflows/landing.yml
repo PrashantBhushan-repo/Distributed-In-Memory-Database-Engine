@@ -1,0 +1,35 @@
+name: Landing page quality
+on:
+  pull_request:
+    paths: ['studio/web/**', '.github/workflows/landing.yml']
+  push:
+    branches: [main]
+    paths: ['studio/web/**', '.github/workflows/landing.yml']
+permissions:
+  contents: read
+jobs:
+  landing:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: studio/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio/web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config playwright.landing.config.ts --workers=1
+      - run: npx lhci autorun --config=lighthouserc.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: landing-quality-reports
+          path: |
+            studio/web/playwright-report
+            studio/web/artifacts/lighthouse

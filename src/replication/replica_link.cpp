@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
+#include "redisx/core/file_io.h"
+#include <charconv>
 #include <sstream>
 
 #ifdef _WIN32
@@ -48,10 +51,12 @@ void ReplicaLink::disconnect() {
         reconnect_timer_id_ = 0;
     }
     if (conn_) {
+        conn_->clear_close_callback();
         conn_->close();
         conn_.reset();
     }
     state_ = ReplicaLinkState::Idle;
+    in_transaction_ = false; transaction_.clear(); transaction_bytes_ = 0;
 }
 
 void ReplicaLink::make_master() {
@@ -82,7 +87,9 @@ void ReplicaLink::connect(const std::string &master_host, std::uint16_t master_p
     struct sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(master_port);
-    inet_pton(AF_INET, master_host.c_str(), &addr.sin_addr);
+    if (inet_pton(AF_INET, master_host.c_str(), &addr.sin_addr) != 1) {
+        ::close(sock); REDISX_LOG_ERROR("Replica host must be a valid IPv4 address"); schedule_reconnect(); return;
+    }
 
 #ifdef _WIN32
     int res = ::connect(static_cast<SOCKET>(sock), reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr));
@@ -127,7 +134,7 @@ void ReplicaLink::connect(const std::string &master_host, std::uint16_t master_p
 }
 
 void ReplicaLink::schedule_reconnect() {
-    if (state_ == ReplicaLinkState::Idle && !is_replica_mode_) return;
+    if (!is_replica_mode_ || reconnect_timer_id_) return;
     REDISX_LOG_INFO("Scheduling replica link reconnect to %s:%u in 2000ms...", master_host_.c_str(), master_port_);
     reconnect_timer_id_ = loop_.add_timer(2000, [this]() {
         reconnect_timer_id_ = 0;
@@ -138,6 +145,8 @@ void ReplicaLink::schedule_reconnect() {
 }
 
 void ReplicaLink::send_ack_if_due() {
+    ack_timer_id_ = 0;
+    if (is_replica_mode_) ack_timer_id_ = loop_.add_timer(1000, [this] { send_ack_if_due(); });
     if (state_ == ReplicaLinkState::Streaming && conn_ && conn_->state() == net::ConnectionState::Connected) {
         proto::RespWriter::write_string_array(conn_->out_buffer(), {"REPLCONF", "ACK", std::to_string(applied_offset_)});
         conn_->flush();
@@ -171,6 +180,7 @@ void ReplicaLink::process_handshake() {
                     } catch (...) {
                         snapshot_expected_len_ = 0;
                     }
+                    if (snapshot_expected_len_ < 19 || snapshot_expected_len_ > 512 * 1024 * 1024) { disconnect(); schedule_reconnect(); return; }
                     snapshot_hdr_parsed_ = true;
                 }
             }
@@ -179,23 +189,32 @@ void ReplicaLink::process_handshake() {
                 if (in_buf.readable_bytes() >= snapshot_expected_len_) {
                     std::string snapshot_data(in_buf.peek_string_view().substr(0, snapshot_expected_len_));
                     in_buf.consume(snapshot_expected_len_);
-                    keyspace_.flush_db(active_db_);
+
 
                     if (snapshot_expected_len_ > 0) {
-                        std::string temp_file = "replica_dump.rdb";
+                        core::TemporaryFile snapshot_temp((std::filesystem::temp_directory_path() / "redisx-replica").string());
+                        const auto &temp_file = snapshot_temp.path();
+                        if (temp_file.empty()) { disconnect(); schedule_reconnect(); return; }
                         std::ofstream ofs(temp_file, std::ios::binary);
                         ofs.write(snapshot_data.data(), static_cast<std::streamsize>(snapshot_data.size()));
                         ofs.close();
 
                         persistence::SnapshotReader reader;
                         auto load_res = reader.load_snapshot(keyspace_, temp_file);
+                        std::filesystem::remove(temp_file);
                         if (load_res.is_error()) {
                             REDISX_LOG_ERROR("Failed to load snapshot payload during FULLRESYNC");
+                            disconnect(); schedule_reconnect(); return;
                         } else {
+                            if (on_full_sync_ && !on_full_sync_(keyspace_)) {
+                                REDISX_LOG_ERROR("Cannot persist full-sync dataset; refusing to acknowledge it");
+                                master_replid_ = "?"; applied_offset_ = 0; disconnect(); schedule_reconnect(); return;
+                            }
                             REDISX_LOG_INFO("Loaded snapshot payload successfully during FULLRESYNC");
                         }
                     }
                     snapshot_hdr_parsed_ = false;
+                    active_db_ = 0;
                     state_ = ReplicaLinkState::Streaming;
                     process_streaming_data();
                     return;
@@ -204,19 +223,12 @@ void ReplicaLink::process_handshake() {
             }
         }
 
-        auto result = proto::RespReader::parse(in_buf);
-        if (result.is_error()) {
-            REDISX_LOG_ERROR("Protocol error during replica handshake");
-            disconnect();
-            schedule_reconnect();
-            return;
-        }
-        if (!result.value().has_value()) {
-            break; // Incomplete handshake response
-        }
-
-        const auto &cmd = result.value().value();
-        std::string reply_str = cmd.empty() ? "" : cmd.arg(0);
+        const auto view = in_buf.peek_string_view();
+        const auto end = view.find("\r\n");
+        if (end == std::string_view::npos) { if (view.size() > 1024) { disconnect(); schedule_reconnect(); } break; }
+        if (view.empty() || view.front() != '+') { disconnect(); schedule_reconnect(); return; }
+        const std::string reply_str(view.substr(1, end - 1));
+        in_buf.consume(end + 2);
 
         switch (state_) {
         case ReplicaLinkState::HandshakePing:
@@ -233,7 +245,7 @@ void ReplicaLink::process_handshake() {
 
         case ReplicaLinkState::HandshakeCapa:
             state_ = ReplicaLinkState::HandshakePsync;
-            proto::RespWriter::write_string_array(conn_->out_buffer(), {"PSYNC", master_replid_, std::to_string(applied_offset_ == 0 ? -1 : static_cast<std::int64_t>(applied_offset_))});
+            proto::RespWriter::write_string_array(conn_->out_buffer(), {"PSYNC", master_replid_, std::to_string(master_replid_ == "?" ? -1 : static_cast<std::int64_t>(applied_offset_ + 1))});
             conn_->flush();
             break;
 
@@ -269,7 +281,6 @@ void ReplicaLink::process_streaming_data() {
     if (!conn_) return;
     auto &in_buf = conn_->in_buffer();
 
-    core::Buffer dummy_out;
     std::size_t out_db = active_db_;
 
     while (in_buf.readable_bytes() > 0) {
@@ -288,16 +299,34 @@ void ReplicaLink::process_streaming_data() {
 
         std::size_t end_readable = in_buf.readable_bytes();
         std::size_t bytes_consumed = start_readable - end_readable;
-        applied_offset_ += bytes_consumed;
-
         const auto &cmd = result.value().value();
-
-        if (cmd.name_upper() == "SELECT" && cmd.arg_count() >= 2) {
-            active_db_ = static_cast<std::size_t>(std::stoul(cmd.arg(1)));
-        } else {
-            dispatcher_.dispatch(cmd, keyspace_, active_db_, dummy_out, out_db, nullptr, &ttl_mgr_);
-            active_db_ = out_db;
+        if (cmd.name_upper() == "MULTI") {
+            if (in_transaction_) { master_replid_ = "?"; applied_offset_ = 0; disconnect(); schedule_reconnect(); return; }
+            in_transaction_ = true; transaction_.clear(); transaction_bytes_ = bytes_consumed; continue;
         }
+        if (in_transaction_ && cmd.name_upper() != "EXEC") {
+            transaction_.push_back(cmd); transaction_bytes_ += bytes_consumed; continue;
+        }
+
+        if (cmd.name_upper() == "REPLCONF" && cmd.arg_count() >= 2 && cmd.arg(1) == "GETACK") {
+            applied_offset_ += bytes_consumed; send_ack_if_due(); continue;
+        }
+        const auto apply = [&](const proto::Command &effect) {
+            core::Buffer reply;
+            out_db = active_db_;
+            dispatcher_.dispatch(effect, keyspace_, active_db_, reply, out_db, nullptr, &ttl_mgr_);
+            active_db_ = out_db;
+            return !reply.peek_string_view().starts_with("-");
+        };
+        bool success = true;
+        if (in_transaction_) {
+            for (const auto &effect : transaction_) if (!apply(effect)) { success = false; break; }
+            in_transaction_ = false; transaction_.clear();
+            if (success) applied_offset_ += transaction_bytes_ + bytes_consumed;
+            transaction_bytes_ = 0;
+        } else if (cmd.name_upper() == "EXEC") success = false;
+        else { success = apply(cmd); if (success) applied_offset_ += bytes_consumed; }
+        if (!success) { master_replid_ = "?"; applied_offset_ = 0; disconnect(); schedule_reconnect(); return; }
     }
 }
 

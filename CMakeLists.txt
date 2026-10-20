@@ -7,6 +7,10 @@ project(
     LANGUAGES CXX
 )
 
+if (WIN32)
+    message(FATAL_ERROR "RedisX uses Linux epoll/fork. Build and run it in Linux or WSL; native Windows networking is not supported.")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -44,6 +48,14 @@ elseif (REDISX_ENABLE_SANITIZER_THREAD)
     message(STATUS "Enabling ThreadSanitizer")
     add_compile_options(-fsanitize=thread)
     add_link_options(-fsanitize=thread)
+endif()
+
+if (REDISX_BUILD_FUZZERS)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "libFuzzer requires Clang")
+    endif()
+    add_compile_options(-fsanitize=fuzzer-no-link)
+    add_link_options(-fsanitize=fuzzer-no-link)
 endif()
 
 # ------------------------------------------------------------
@@ -229,6 +241,7 @@ endif()
 # ------------------------------------------------------------
 # Security Library
 # ------------------------------------------------------------
+find_package(OpenSSL REQUIRED)
 add_library(redisx_security
     src/security/auth.cpp
     src/security/acl.cpp
@@ -321,6 +334,7 @@ add_library(redisx_persistence
     src/persistence/snapshot_reader.cpp
     src/persistence/aof.cpp
     src/persistence/recovery.cpp
+    src/persistence/service.cpp
 )
 
 target_include_directories(redisx_persistence
@@ -379,6 +393,22 @@ endif()
 if (NOT REDISX_WARN_FLAGS STREQUAL "")
     target_compile_options(redisx_net PRIVATE ${REDISX_WARN_FLAGS})
 endif()
+
+add_library(redisx_bench_workloads
+    benchmarks/workloads.cpp
+)
+
+target_include_directories(redisx_bench_workloads
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}/include
+)
+
+if (NOT REDISX_WARN_FLAGS STREQUAL "")
+    target_compile_options(redisx_bench_workloads PRIVATE ${REDISX_WARN_FLAGS})
+endif()
+
 
 # ------------------------------------------------------------
 # Tools Executables
@@ -476,3 +506,4 @@ if (REDISX_BUILD_BENCHMARKS)
         add_subdirectory(benchmarks)
     endif()
 endif()
+target_link_libraries(redisx_security PUBLIC OpenSSL::SSL OpenSSL::Crypto)

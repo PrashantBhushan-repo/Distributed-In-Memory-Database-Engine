@@ -13,21 +13,6 @@ FetchContent_MakeAvailable(googlebenchmark)
 # ------------------------------------------------------------
 # Workload Generator Library
 # ------------------------------------------------------------
-add_library(redisx_bench_workloads
-    workloads.cpp
-)
-
-target_include_directories(redisx_bench_workloads
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}/include
-)
-
-if (NOT REDISX_WARN_FLAGS STREQUAL "")
-    target_compile_options(redisx_bench_workloads PRIVATE ${REDISX_WARN_FLAGS})
-endif()
-
 # ------------------------------------------------------------
 # Google Benchmark Targets
 # ------------------------------------------------------------

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <stdexcept>
+#include <limits>
 
 namespace redisx::core {
 
@@ -31,8 +33,10 @@ void Buffer::reserve(size_t additional_bytes) {
     }
 
     // Need exponential reallocation
+    if (additional_bytes > buf_.max_size() - write_pos_) throw std::length_error("buffer capacity exceeded");
     size_t needed = write_pos_ + additional_bytes;
-    size_t new_cap = std::max(buf_.size() * 2, needed);
+    size_t doubled = buf_.size() > buf_.max_size() / 2 ? buf_.max_size() : buf_.size() * 2;
+    size_t new_cap = std::max(doubled, needed);
     buf_.resize(new_cap);
 }
 
@@ -40,8 +44,13 @@ void Buffer::append(const void *data, size_t len) {
     if (len == 0 || data == nullptr) {
         return;
     }
-    reserve(len);
-    std::memcpy(writable_data(), data, len);
+    const auto pointer = reinterpret_cast<std::uintptr_t>(data);
+    const auto begin = reinterpret_cast<std::uintptr_t>(buf_.data());
+    if (pointer >= begin && pointer - begin < buf_.size()) {
+        if (len > buf_.size() - (pointer - begin)) throw std::out_of_range("self append exceeds buffer");
+        const std::vector<std::uint8_t> copy(static_cast<const std::uint8_t *>(data), static_cast<const std::uint8_t *>(data) + len);
+        reserve(len); std::memcpy(writable_data(), copy.data(), len);
+    } else { reserve(len); std::memcpy(writable_data(), data, len); }
     produce(len);
 }
 
@@ -50,7 +59,7 @@ void Buffer::append(std::string_view sv) {
 }
 
 void Buffer::produce(size_t len) noexcept {
-    write_pos_ = std::min(write_pos_ + len, buf_.size());
+    write_pos_ += std::min(len, writable_bytes());
 }
 
 void Buffer::consume(size_t len) noexcept {

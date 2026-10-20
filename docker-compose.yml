@@ -14,6 +14,7 @@ services:
       - "9121:9121"
     volumes:
       - ./data:/data
+      - ./infra/configs/pbRedis.dev.conf:/etc/redisx/redis.conf:ro
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -38,15 +39,11 @@ services:
     container_name: redisx-gateway
     ports:
       - "4000:4000"
+    env_file:
+      - .env.development
     environment:
       - REDIS_HOST=redisx
       - REDIS_PORT=6379
-      - PORT=4000
-      - HOST=0.0.0.0
-      - LOG_LEVEL=info
-      - DEMO_FALLBACK=true
-      - JWT_SECRET=redisx-studio-super-secure-production-secret-key-32chars!
-      - CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000
     depends_on:
       redisx:
         condition: service_healthy

@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <vector>
 #include <string_view>
 
 namespace redisx::db {
@@ -37,6 +38,8 @@ class Dict {
     // Mutators
     // Inserts or overwrites key with new value and optional expire_at_ms
     bool insert_or_assign(std::string key, Value val, std::uint64_t expire_at_ms = 0);
+    [[nodiscard]] std::vector<const Entry *> sample_entries(std::size_t count, bool volatile_only) const;
+    void update_accounting(std::string_view key);
     bool insert_new(std::string key, Value val, std::uint64_t expire_at_ms = 0);
     bool erase(std::string_view key);
 
@@ -68,6 +71,7 @@ class Dict {
 
     DictTable ht_[2];
     std::int64_t rehash_idx_{-1};
+    mutable std::size_t scan_depth_{0};
 };
 
 } // namespace redisx::db

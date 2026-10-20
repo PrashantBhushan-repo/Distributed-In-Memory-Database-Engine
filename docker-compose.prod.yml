@@ -3,15 +3,23 @@ services:
   # 1. C++ High-Performance In-Memory Database Engine
   # ----------------------------------------------------------------------------
   redisx:
-    image: ghcr.io/prashantbhushan-repo/pbredisdb-engine:latest
+    image: ${ENGINE_IMAGE:-ghcr.io/prashantbhushan-repo/pbredisdb-engine:latest}
     container_name: redisx-server
-    command: ["redisx", "-h", "0.0.0.0", "-p", "6379", "-c", "/etc/redisx/redis.conf"]
+    command: ["-h", "0.0.0.0", "-p", "6379", "-c", "/etc/redisx/redis.conf"]
     ports:
       - "6379:6379"
       - "9121:9121"
     volumes:
-      - ./data:/data
+      - ${DATA_DIR:-./data}:/data
+      - ./infra/configs/pbRedis.prod.conf:/etc/redisx/redis.conf:ro
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.80'
+          memory: 384M
+        reservations:
+          memory: 64M
     logging:
       driver: "json-file"
       options:
@@ -22,25 +30,31 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-      start_period: 3s
+      start_period: 30s
 
   # ----------------------------------------------------------------------------
   # 2. Fastify API Gateway & Safety Validation Layer
   # ----------------------------------------------------------------------------
   gateway:
-    image: ghcr.io/prashantbhushan-repo/pbredisdb-gateway:latest
+    image: ${GATEWAY_IMAGE:-ghcr.io/prashantbhushan-repo/pbredisdb-gateway:latest}
     container_name: redisx-gateway
     ports:
       - "4000:4000"
+    env_file:
+      - .env.production
     environment:
       - REDIS_HOST=redisx
       - REDIS_PORT=6379
-      - PORT=4000
-      - HOST=0.0.0.0
-      - LOG_LEVEL=info
-      - DEMO_FALLBACK=true
-      - JWT_SECRET=redisx-studio-super-secure-production-secret-key-32chars!
-      - CORS_ORIGIN=*
+      - NODE_ENV=production
+      - DEMO_MODE=false
+      - DEMO_FALLBACK=false
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          memory: 64M
     depends_on:
       redisx:
         condition: service_healthy
@@ -61,10 +75,17 @@ services:
   # 3. React 18 Studio Web Visualizer & Playground
   # ----------------------------------------------------------------------------
   web:
-    image: ghcr.io/prashantbhushan-repo/pbredisdb-web:latest
+    image: ${WEB_IMAGE:-ghcr.io/prashantbhushan-repo/pbredisdb-web:latest}
     container_name: redisx-web
     ports:
       - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          memory: 16M
     depends_on:
       gateway:
         condition: service_healthy
@@ -95,6 +116,13 @@ services:
       - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 256M
+        reservations:
+          memory: 64M
     volumes:
       - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -124,6 +152,13 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_USERS_ALLOW_SIGN_UP=false
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 256M
+        reservations:
+          memory: 64M
     volumes:
       - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -139,4 +174,6 @@ services:
 
 volumes:
   prometheus-data:
+    name: ${PROMETHEUS_DATA_VOLUME:-pbredisdb_prometheus-data}
   grafana-data:
+    name: ${GRAFANA_DATA_VOLUME:-pbredisdb_grafana-data}

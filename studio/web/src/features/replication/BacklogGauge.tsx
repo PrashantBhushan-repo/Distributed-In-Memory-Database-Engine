@@ -57,7 +57,7 @@ export const BacklogGauge: React.FC<BacklogGaugeProps> = ({
         <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-sky-500 to-emerald-500 transition-all duration-500 rounded-full"
-            style={{ width: `${Math.max(5, percentUsed)}%` }}
+            style={{ width: `${percentUsed}%` }}
           />
         </div>
       </div>
@@ -67,10 +67,9 @@ export const BacklogGauge: React.FC<BacklogGaugeProps> = ({
         <div className="flex items-start gap-3">
           <Zap className="h-4 w-4 text-sky-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <h4 className="text-xs font-bold text-sky-300">Resilience Window Guarantee</h4>
+            <h4 className="text-xs font-bold text-sky-300">Partial resynchronization window</h4>
             <p className="text-xs text-slate-300 leading-relaxed">
-              At current write velocity, a replica can be offline for about{' '}
-              <strong className="text-emerald-400 font-mono text-sm">~{coverageSeconds} seconds</strong> and still perform a fast partial resync (<code className="text-sky-300 font-bold">PSYNC</code>) without triggering an expensive full RDB background snapshot transfer.
+              {coverageSeconds > 0 ? `Estimated coverage: about ${coverageSeconds} seconds at the observed write rate. This estimate changes with traffic.` : 'Coverage cannot be estimated until the engine reports both backlog size and replication write rate.'}
             </p>
           </div>
         </div>

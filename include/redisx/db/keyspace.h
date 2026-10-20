@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 namespace redisx::db {
 
@@ -26,6 +27,8 @@ class Keyspace {
     [[nodiscard]] Dict &get_db(std::size_t db_idx);
     [[nodiscard]] const Dict &get_db(std::size_t db_idx) const;
 
+    void set_expiration_check(std::function<bool(std::size_t, std::string_view)> check) { expiration_check_ = std::move(check); }
+
     // Keyspace operations
     bool db_set(std::size_t db_idx, std::string key, Value val, std::uint64_t expire_at_ms = 0);
     [[nodiscard]] Entry *db_get(std::size_t db_idx, std::string_view key);
@@ -42,6 +45,7 @@ class Keyspace {
 
   private:
     std::array<Dict, NUM_DATABASES> dbs_;
+    std::function<bool(std::size_t, std::string_view)> expiration_check_;
 };
 
 } // namespace redisx::db

@@ -89,8 +89,12 @@ TEST_F(ChaosClusterHarnessTest, AofDiskErrorsDoNotLoseAcknowledgedWrites) {
 
         std::string resp(reinterpret_cast<const char *>(out_buf.readable_data()), out_buf.readable_bytes());
         if (resp.find("+OK") != std::string::npos) {
-            aof.append_command(0, {"SET", key, val});
-            acked_writes[key] = val;
+            if (aof.append_command(0, {"SET", key, val})) acked_writes[key] = val;
+            else {
+                EXPECT_FALSE(aof.healthy());
+                aof.close();
+                ASSERT_TRUE(aof.open(test_aof_, persistence::FsyncPolicy::Always));
+            }
         }
     }
     aof.close();

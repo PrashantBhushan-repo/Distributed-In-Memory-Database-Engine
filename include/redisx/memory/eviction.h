@@ -57,6 +57,7 @@ class EvictionManager {
   public:
     EvictionManager() = default;
 
+    void set_evict_callback(std::function<void(std::size_t, const std::string &)> callback) { on_evict_ = std::move(callback); }
     void set_policy(EvictionPolicy policy) noexcept { policy_ = policy; }
     [[nodiscard]] EvictionPolicy policy() const noexcept { return policy_; }
 
@@ -73,6 +74,7 @@ class EvictionManager {
     bool perform_eviction(db::Keyspace &keyspace, db::TTLManager &ttl_mgr);
 
   private:
+    std::function<void(std::size_t, const std::string &)> on_evict_;
     EvictionPolicy policy_{EvictionPolicy::NoEviction};
     size_t maxmemory_{0}; // 0 = unlimited
     size_t samples_{5};

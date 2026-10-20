@@ -43,6 +43,9 @@ import { DemoRedisEngine } from './demo.js';
 import { SafetyEngine } from '../safety/engine.js';
 import { ACL_CATEGORIES, parseAclListLine, buildAclSetUserArgs } from '../security/acl.js';
 import { loadConfigMetadata, validateConfigParam, generateRedisConfExport } from '../config/meta.js';
+import { env } from '../config/env.js';
+import { databaseContext } from './context.js';
+import { discoverCapabilities } from './capabilities.js';
 
 let cachedCommands: CommandMeta[] | null = null;
 
@@ -69,22 +72,52 @@ function loadBundledCommands(): CommandMeta[] {
 }
 
 export class RedisGatewayClient {
-  private redis: Redis | null = null;
-  private demoEngine = new DemoRedisEngine();
+  private primaryRedis: Redis | null = null;
+  private databases = new Map<number, Redis>();
+  private get redis(): Redis | null {
+    const db = databaseContext.getStore() ?? 0;
+    if (db === 0 || !this.primaryRedis || this.status === 'demo') return this.primaryRedis;
+    if (this.primaryRedis.status !== 'ready') throw Object.assign(new Error('The engine is reconnecting. Retry this database request shortly.'), { statusCode: 503 });
+    let client = this.databases.get(db);
+    if (!client) {
+      client = this.primaryRedis.duplicate({ db, lazyConnect: false, enableOfflineQueue: true });
+      client.on('error', () => {});
+      this.databases.set(db, client);
+    }
+    return client;
+  }
+  private set redis(client: Redis | null) { this.primaryRedis = client; }
+  private demo = new DemoRedisEngine();
+  private get demoEngine(): DemoRedisEngine {
+    if (this.status === 'demo' && (databaseContext.getStore() ?? 0) !== 0) {
+      throw Object.assign(new Error('The demo dataset uses database 0. Select database 0 or connect a live engine.'), { statusCode: 400 });
+    }
+    if (this.status !== 'demo') {
+      throw Object.assign(new Error('This operation is unavailable on the connected engine. No sample data has been substituted.'), {
+        statusCode: this.status === 'connected' ? 501 : 503,
+        code: this.status === 'connected' ? 'ENGINE_UNSUPPORTED' : 'ENGINE_UNAVAILABLE',
+      });
+    }
+    return this.demo;
+  }
   private host: string;
   private port: number;
   private password?: string;
+  private tls = env.REDIS_TLS;
   private isDemoMode = false;
   private status: 'connected' | 'connecting' | 'error' | 'demo' = 'connecting';
   private capabilities: Set<string> = new Set();
   private lastError?: string;
   private lastPingMs = 0;
+  private reconnectTimer?: NodeJS.Timeout;
+  private connectionGeneration = 0;
+  private capabilitiesState: 'pending' | 'ready' | 'error' = 'pending';
 
   constructor() {
-    this.host = process.env.REDIS_HOST || '127.0.0.1';
-    this.port = Number(process.env.REDIS_PORT) || 6379;
-    this.password = process.env.REDIS_PASSWORD || undefined;
-    this.isDemoMode = process.env.DEMO_MODE === 'true';
+    this.host = env.REDIS_HOST;
+    this.port = env.REDIS_PORT;
+    this.password = env.REDIS_PASSWORD || undefined;
+    this.isDemoMode = env.DEMO_MODE;
 
     if (this.isDemoMode) {
       this.status = 'demo';
@@ -103,9 +136,10 @@ export class RedisGatewayClient {
       'HMSET', 'HMGET', 'HDEL', 'HEXISTS', 'HLEN', 'HGETALL', 'SADD', 'SREM',
       'SMEMBERS', 'SISMEMBER', 'SCARD', 'ZADD', 'ZREM', 'ZSCORE', 'ZRANGE',
       'ZCARD', 'ZRANK', 'MULTI', 'EXEC', 'DISCARD', 'WATCH', 'UNWATCH',
-      'PUBLISH', 'SUBSCRIBE', 'PSYNC', 'SAVE', 'BGSAVE', 'SLOWLOG'
+      'PUBLISH', 'PUBSUB', 'SUBSCRIBE', 'PSYNC', 'SAVE', 'BGSAVE', 'SLOWLOG', 'SCAN', 'PTTL', 'PERSIST', 'CLIENT', 'ACL', 'CONFIG', 'COMMAND', 'MEMORY', 'OBJECT'
     ];
     this.capabilities = new Set(defaultCaps);
+    this.capabilitiesState = 'ready';
   }
 
   private isConnecting = false;
@@ -113,112 +147,129 @@ export class RedisGatewayClient {
   private connect() {
     if (this.isConnecting) return;
     this.isConnecting = true;
-
-    try {
-      if (this.redis) {
-        try { this.redis.disconnect(false); } catch {}
-        this.redis = null;
-      }
-
-      this.status = 'connecting';
-      this.redis = new Redis({
-        host: this.host,
-        port: this.port,
-        password: this.password,
-        connectTimeout: 2000,
-        maxRetriesPerRequest: 1,
-        lazyConnect: true,
-        retryStrategy: (times: number) => {
-          if (this.status !== 'demo' && process.env.DEMO_FALLBACK !== 'false') {
-            this.status = 'demo';
-            this.initDemoCapabilities();
-          }
-          return Math.min(times * 300, 3000);
-        },
-      });
-
-      this.redis.on('connect', async () => {
-        this.status = 'connected';
-        this.lastError = undefined;
-        this.isConnecting = false;
-        await this.probeCapabilities();
-      });
-
-      this.redis.on('ready', () => {
-        this.status = 'connected';
-        this.lastError = undefined;
-        this.isConnecting = false;
-      });
-
-      this.redis.on('close', () => {
-        if (process.env.DEMO_FALLBACK !== 'false') {
-          this.status = 'demo';
-          this.initDemoCapabilities();
-        }
-      });
-
-      this.redis.on('error', (err: any) => {
-        this.lastError = err.message;
-        if (this.status !== 'demo' && process.env.DEMO_FALLBACK !== 'false') {
-          this.status = 'demo';
-          this.initDemoCapabilities();
-        }
-      });
-
-      this.redis.connect().catch((err: any) => {
-        this.lastError = err.message;
-        if (process.env.DEMO_FALLBACK !== 'false') {
-          this.status = 'demo';
-          this.initDemoCapabilities();
-        }
-        this.isConnecting = false;
-      });
-    } catch (err: any) {
-      this.lastError = err.message;
-      if (process.env.DEMO_FALLBACK !== 'false') {
-        this.status = 'demo';
-        this.initDemoCapabilities();
-      }
+    const generation = ++this.connectionGeneration;
+    this.primaryRedis?.disconnect(false);
+    for (const database of this.databases.values()) database.disconnect();
+    this.databases.clear();
+    this.status = 'connecting';
+    this.capabilitiesState = 'pending';
+    this.capabilities = new Set();
+    const client = new Redis({
+      host: this.host, port: this.port, password: this.password,
+      tls: this.tls ? {} : undefined, enableOfflineQueue: false,
+      connectTimeout: 2000, commandTimeout: 5000, maxRetriesPerRequest: 1, lazyConnect: true,
+      retryStrategy: times => {
+        if (generation !== this.connectionGeneration || this.isDemoMode) return null;
+        if (env.DEMO_FALLBACK) { this.status = 'demo'; this.initDemoCapabilities(); }
+        return Math.min(times * 300, 3000);
+      },
+    });
+    this.primaryRedis = client;
+    const active = () => generation === this.connectionGeneration && this.primaryRedis === client && !this.isDemoMode;
+    client.on('ready', () => {
+      if (!active()) return;
+      this.status = 'connected'; this.lastError = undefined; this.isConnecting = false;
+      void this.probeCapabilities(client, generation);
+    });
+    client.on('close', () => {
+      if (!active()) return;
       this.isConnecting = false;
-    }
+      if (env.DEMO_FALLBACK) { this.status = 'demo'; this.initDemoCapabilities(); }
+      else { this.status = 'connecting'; this.capabilitiesState = 'pending'; }
+    });
+    client.on('error', (error: Error) => {
+      if (!active()) return;
+      this.lastError = error.message;
+      if (env.DEMO_FALLBACK) { this.status = 'demo'; this.initDemoCapabilities(); }
+    });
+    client.connect().catch((error: Error) => {
+      if (!active()) return;
+      this.lastError = error.message; this.isConnecting = false;
+      if (env.DEMO_FALLBACK) { this.status = 'demo'; this.initDemoCapabilities(); }
+      else this.status = 'error';
+    });
   }
 
   private startReconnectHeartbeat() {
-    setInterval(() => {
-      if (this.status === 'connected') {
+    if (this.reconnectTimer) clearInterval(this.reconnectTimer);
+    this.reconnectTimer = setInterval(() => {
+      if (this.isDemoMode) return;
+      const client = this.primaryRedis;
+      if (client?.status === 'ready') {
+        if (this.capabilitiesState === 'error') void this.probeCapabilities(client, this.connectionGeneration);
         return;
       }
-      if (!this.redis || this.redis.status === 'end' || this.redis.status === 'close' || this.redis.status === 'wait') {
-        this.connect();
-      }
+      if (!client || client.status === 'end' || client.status === 'wait') this.connect();
     }, 3000);
   }
 
-  private async probeCapabilities() {
-    if (!this.redis) return;
+  private async probeCapabilities(client: Redis, generation: number) {
+    this.capabilitiesState = 'pending';
     try {
-      const probeList = [
-        'GET', 'SET', 'MGET', 'MSET', 'INCR', 'DECR', 'DEL', 'EXISTS', 'TYPE',
-        'EXPIRE', 'TTL', 'LPUSH', 'RPUSH', 'LPOP', 'RPOP', 'LRANGE', 'HSET',
-        'HGET', 'HGETALL', 'SADD', 'SMEMBERS', 'ZADD', 'ZRANGE', 'MULTI',
-        'EXEC', 'WATCH', 'PUBLISH', 'SUBSCRIBE', 'PSYNC', 'SLOWLOG', 'CONFIG'
-      ];
-      this.capabilities.clear();
-      this.capabilities.add('PING');
-      this.capabilities.add('INFO');
-      this.capabilities.add('DBSIZE');
-
-      for (const cmd of probeList) {
-        this.capabilities.add(cmd);
-      }
+      const discovered = await discoverCapabilities({ call: (command, ...args) => client.call(command, ...args) });
+      if (generation !== this.connectionGeneration || this.primaryRedis !== client || client.status !== 'ready') return;
+      this.capabilities = discovered;
+      this.capabilitiesState = 'ready';
     } catch {
-      this.initDemoCapabilities();
+      if (generation !== this.connectionGeneration || this.primaryRedis !== client) return;
+      this.capabilitiesState = 'error';
+      this.lastError = 'Feature discovery is temporarily unavailable. Retrying automatically.';
     }
+  }
+  public close() {
+    this.connectionGeneration++;
+    this.isConnecting = false;
+    if (this.reconnectTimer) clearInterval(this.reconnectTimer);
+    this.reconnectTimer = undefined;
+    for (const client of this.databases.values()) client.disconnect();
+    this.databases.clear();
+    this.primaryRedis?.disconnect();
+    this.primaryRedis = null;
+  }
+
+  public async testConnection(options: { host: string; port: number; password?: string; tls: boolean }) {
+    const client = new Redis({ ...options, tls: options.tls ? {} : undefined, lazyConnect: true,
+      connectTimeout: 3000, commandTimeout: 3000, retryStrategy: () => null });
+    client.on('error', () => {});
+    try {
+      await client.connect();
+      const start = performance.now();
+      const response = await client.ping();
+      if (response !== 'PONG') throw new Error('The server did not return PONG.');
+      return { ok: true, latencyMs: Math.round((performance.now() - start) * 100) / 100 };
+    } finally { client.disconnect(); }
+  }
+
+  public async configure(options: { host: string; port: number; password?: string; tls: boolean }) {
+    return databaseContext.run(0, async () => {
+    await this.testConnection(options);
+    this.close();
+    this.databases.clear();
+    this.host = options.host; this.port = options.port; this.password = options.password; this.tls = options.tls;
+    this.isDemoMode = false; this.isConnecting = false; this.capabilities.clear();
+    this.connect(); this.startReconnectHeartbeat();
+    const generation = this.connectionGeneration;
+    const deadline = Date.now() + 20000;
+    while (this.connectionGeneration === generation && (this.status !== 'connected' || this.capabilitiesState === 'pending')) {
+      if (Date.now() > deadline) throw new Error('The engine did not finish connecting in time.');
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    if (this.connectionGeneration !== generation) throw new Error('The connection was replaced by a newer request.');
+    return this.getStatus();
+    });
+  }
+
+  public useDemo() {
+    this.isDemoMode = true; this.close(); this.databases.clear();
+    this.status = 'demo'; this.lastError = undefined; this.initDemoCapabilities();
+    return this.getStatus();
   }
 
   public getStatus(): ConnectionStatus {
     return {
       status: this.status,
+      capabilitiesState: this.capabilitiesState,
+      tlsEnabled: this.tls,
       host: this.host,
       port: this.port,
       isDemo: this.status === 'demo',
@@ -228,16 +279,38 @@ export class RedisGatewayClient {
     };
   }
 
+  private networkStreams = new WeakMap<object, { inputBytes: number; outputBytes: number }>();
+  private gatewayTraffic = { inputBytes: 0, outputBytes: 0 };
+
+  public getNetworkCounters(): { inputBytes: number; outputBytes: number } | null {
+    if (this.status !== 'connected') return null;
+    for (const client of [this.primaryRedis, ...this.databases.values()]) {
+      const stream = client?.stream;
+      if (!stream || client.status !== 'ready') continue;
+      // Direction is relative to the engine. These sockets cover Studio traffic
+      // only; they cannot establish whole-engine traffic from other clients.
+      const current = { inputBytes: stream.bytesWritten, outputBytes: stream.bytesRead };
+      const previous = this.networkStreams.get(stream) ?? { inputBytes: 0, outputBytes: 0 };
+      this.gatewayTraffic.inputBytes += Math.max(0, current.inputBytes - previous.inputBytes);
+      this.gatewayTraffic.outputBytes += Math.max(0, current.outputBytes - previous.outputBytes);
+      this.networkStreams.set(stream, current);
+    }
+    return { ...this.gatewayTraffic };
+  }
+
   public async getInfo(): Promise<ParsedRedisInfo> {
-    if (this.status === 'demo' || !this.redis) {
+    if (this.status === 'demo') {
       return this.demoEngine.getParsedInfo();
     }
-    try {
-      const raw = await this.redis.info();
-      return parseRedisInfo(raw);
-    } catch {
-      return this.demoEngine.getParsedInfo();
+    if (this.redis) {
+      try {
+        const raw = await this.redis.info();
+        return parseRedisInfo(raw);
+      } catch (err) {
+        throw Object.assign(new Error('The engine did not return INFO. Check its address, credentials, and availability.'), { statusCode: 503, code: 'ENGINE_UNAVAILABLE' });
+      }
     }
+    throw Object.assign(new Error('The engine is not connected.'), { statusCode: 503, code: 'ENGINE_UNAVAILABLE' });
   }
 
   public async getKeys(cursor = 0, match = '*', count = 100, type?: string): Promise<{ cursor: number; keys: KeySummary[]; totalApprox: number }> {
@@ -261,6 +334,7 @@ export class RedisGatewayClient {
       for (const name of keyNames) {
         pipeline.type(name);
         pipeline.pttl(name);
+        pipeline.call('MEMORY', 'USAGE', name);
       }
 
       const results = await pipeline.exec();
@@ -268,13 +342,15 @@ export class RedisGatewayClient {
 
       for (let i = 0; i < keyNames.length; i++) {
         const name = keyNames[i];
-        const typeRes = results ? results[i * 2] : null;
-        const pttlRes = results ? results[i * 2 + 1] : null;
+        const typeRes = results ? results[i * 3] : null;
+        const pttlRes = results ? results[i * 3 + 1] : null;
+        const memoryRes = results ? results[i * 3 + 2] : null;
 
         const ktype = (typeRes && !typeRes[0]) ? String(typeRes[1]) : 'string';
         const pttlMs = (pttlRes && !pttlRes[0]) ? Number(pttlRes[1]) : -1;
         const ttlSec = pttlMs > 0 ? Math.ceil(pttlMs / 1000) : pttlMs;
 
+        if (ktype === 'none' || pttlMs === -2) continue;
         if (type && type !== 'all' && ktype !== type) continue;
 
         summaries.push({
@@ -282,7 +358,7 @@ export class RedisGatewayClient {
           type: ktype as any,
           ttl: ttlSec,
           ttlMs: pttlMs,
-          memoryBytes: 64,
+          memoryBytes: memoryRes && !memoryRes[0] && typeof memoryRes[1] === 'number' ? memoryRes[1] : undefined,
         });
       }
 
@@ -373,7 +449,7 @@ export class RedisGatewayClient {
       for (let i = 0; i < 16; i++) {
         dbs[i] = 0;
       }
-      dbs[0] = dbsize;
+      dbs[databaseContext.getStore() ?? 0] = dbsize;
 
       const lines = info.split('\r\n');
       for (const line of lines) {
@@ -405,13 +481,13 @@ export class RedisGatewayClient {
 
       const [pttl, encoding, mem] = await Promise.all([
         this.redis.pttl(name).catch(() => -1),
-        (this.redis as any).call('OBJECT', 'ENCODING', name).catch(() => 'raw'),
-        (this.redis as any).call('MEMORY', 'USAGE', name).catch(() => 128),
+        (this.redis as any).call('OBJECT', 'ENCODING', name).catch(() => 'unknown'),
+        (this.redis as any).call('MEMORY', 'USAGE', name).catch(() => 0),
       ]);
 
       const ttlSec = pttl > 0 ? Math.ceil(pttl / 1000) : pttl;
-      const memoryBytes = typeof mem === 'number' ? mem : 128;
-      const encStr = String(encoding || 'raw');
+      const memoryBytes = typeof mem === 'number' ? mem : 0;
+      const encStr = String(encoding || 'unknown');
 
       const page = Math.max(1, Number(options.page) || 1);
       const limit = Math.min(Math.max(1, Number(options.limit) || 50), 200);
@@ -428,13 +504,13 @@ export class RedisGatewayClient {
 
       if (type === 'string') {
         const val = (await this.redis.get(name)) || '';
-        const formatHint = this.demoEngine.detectFormatHint(val);
+        const formatHint = this.demo.detectFormatHint(val);
         return {
           ...base,
           type: 'string',
           value: val,
           formatHint,
-          length: val.length,
+          length: Buffer.byteLength(val),
         };
       }
 
@@ -462,7 +538,10 @@ export class RedisGatewayClient {
 
       if (type === 'hash') {
         const total = await this.redis.hlen(name);
-        const hscanRes = await this.redis.hscan(name, options.cursor || 0, 'COUNT', limit);
+        if (!this.capabilities.has('HSCAN') && total > 1000) throw new Error('This engine does not support HSCAN for large hashes.');
+        const hscanRes = this.capabilities.has('HSCAN')
+          ? await this.redis.hscan(name, options.cursor || 0, 'COUNT', limit)
+          : [String(startIdx + limit < total ? startIdx + limit : 0), Object.entries(await this.redis.hgetall(name)).slice(startIdx, startIdx + limit).flat()] as [string, string[]];
         const nextCursor = Number(hscanRes[0]);
         const kvs = hscanRes[1];
         const hashEntries: Array<{ field: string; value: string }> = [];
@@ -479,6 +558,7 @@ export class RedisGatewayClient {
           length: total,
           hashEntries,
           hashPage: {
+            nextCursor,
             page,
             limit,
             total,
@@ -489,7 +569,10 @@ export class RedisGatewayClient {
 
       if (type === 'set') {
         const total = await this.redis.scard(name);
-        const sscanRes = await this.redis.sscan(name, options.cursor || 0, 'COUNT', limit);
+        if (!this.capabilities.has('SSCAN') && total > 1000) throw new Error('This engine does not support SSCAN for large sets.');
+        const sscanRes = this.capabilities.has('SSCAN')
+          ? await this.redis.sscan(name, options.cursor || 0, 'COUNT', limit)
+          : [String(startIdx + limit < total ? startIdx + limit : 0), (await this.redis.smembers(name)).slice(startIdx, startIdx + limit)] as [string, string[]];
         const nextCursor = Number(sscanRes[0]);
         let setMembers = sscanRes[1];
         if (options.filter) {
@@ -501,6 +584,7 @@ export class RedisGatewayClient {
           length: total,
           setMembers,
           setPage: {
+            nextCursor,
             page,
             limit,
             total,
@@ -512,7 +596,7 @@ export class RedisGatewayClient {
       if (type === 'zset') {
         const total = await this.redis.zcard(name);
         const stopIdx = startIdx + limit - 1;
-        const rawWithScores = await this.redis.zrevrange(name, startIdx, stopIdx, 'WITHSCORES');
+        const rawWithScores = await this.redis.zrange(name, startIdx, stopIdx, 'WITHSCORES');
         const zsetMembers: Array<{ rank: number; member: string; score: number }> = [];
         for (let i = 0; i < rawWithScores.length; i += 2) {
           zsetMembers.push({
@@ -541,12 +625,14 @@ export class RedisGatewayClient {
     }
   }
 
-  public async setString(name: string, value: string, ttl?: number): Promise<{ command: string }> {
+  public async setString(name: string, value: string, ttl?: number, keepTtl = false): Promise<{ command: string }> {
     if (this.status === 'demo' || !this.redis) {
       return this.demoEngine.setString(name, value, ttl);
     }
-    const cmd = ttl && ttl > 0 ? `SET ${name} "${value}" EX ${ttl}` : `SET ${name} "${value}"`;
-    if (ttl && ttl > 0) {
+    const cmd = keepTtl ? `SET ${name} ${JSON.stringify(value)} KEEPTTL` : ttl && ttl > 0 ? `SET ${name} "${value}" EX ${ttl}` : `SET ${name} "${value}"`;
+    if (keepTtl) {
+      await this.redis.set(name, value, 'KEEPTTL');
+    } else if (ttl && ttl > 0) {
       await this.redis.set(name, value, 'EX', ttl);
     } else {
       await this.redis.set(name, value);
@@ -576,10 +662,7 @@ export class RedisGatewayClient {
     if (this.status === 'demo' || !this.redis) {
       return this.demoEngine.deleteListIndex(name, index);
     }
-    const item = await this.redis.lindex(name, index);
-    if (!item) return { command: `LREM ${name} 1 ...`, success: false };
-    await this.redis.lrem(name, 1, item);
-    return { command: `LREM ${name} 1 "${item}"`, success: true };
+    throw Object.assign(new Error('Atomic deletion by list index is unavailable on this engine. Pop from the left or right instead.'), { statusCode: 501, code: 'ENGINE_UNSUPPORTED' });
   }
 
   public async setHashField(name: string, field: string, value: string): Promise<{ command: string }> {
@@ -653,6 +736,11 @@ export class RedisGatewayClient {
   public async bulkDeleteKeys(keys: string[], dryRun = false): Promise<{ dryRun: boolean; count: number; sample: string[]; command: string }> {
     if (this.status !== 'connected' || !this.redis) {
       return this.demoEngine.bulkDeleteKeys(keys, dryRun);
+    }
+    keys = [...new Set(keys)];
+    if (dryRun && keys.length) {
+      const results = await this.redis.pipeline(keys.map(key => ['EXISTS', key])).exec();
+      keys = keys.filter((_key, index) => results?.[index]?.[1] === 1);
     }
     const sample = keys.slice(0, 5);
     const command = `DEL ${keys.slice(0, 10).join(' ')}${keys.length > 10 ? ' ...' : ''}`;
@@ -902,7 +990,9 @@ export class RedisGatewayClient {
         for (let i = 0; i < sampleKeys.length; i++) {
           const k = sampleKeys[i];
           const type = (pipeResults?.[i * 2]?.[1] as string) || 'string';
-          const mem = Number(pipeResults?.[i * 2 + 1]?.[1]) || 128;
+          const measurement = pipeResults?.[i * 2 + 1];
+          if (!measurement || measurement[0] || typeof measurement[1] !== 'number') continue;
+          const mem = measurement[1];
 
           totalSampledBytes += mem;
 
@@ -937,8 +1027,8 @@ export class RedisGatewayClient {
         used_memory_peak: rawMem.used_memory_peak,
         maxmemory: rawMem.maxmemory,
         maxmemory_policy: rawMem.maxmemory_policy || 'noeviction',
-        mem_fragmentation_ratio: 1.10,
-        evicted_keys: 0,
+        mem_fragmentation_ratio: 0,
+        evicted_keys: rawStats.evicted_keys ?? 0,
         per_type,
         per_prefix,
         estimated: true,
@@ -971,7 +1061,9 @@ export class RedisGatewayClient {
       const items: Array<{ name: string; type: string; memoryBytes: number; ttl: number }> = [];
       for (let i = 0; i < sampleKeys.length; i++) {
         const k = sampleKeys[i];
-        const mem = Number(results?.[i * 3]?.[1]) || 128;
+        const measured = results?.[i * 3];
+        if (!measured || measured[0] || typeof measured[1] !== 'number') continue;
+        const mem = measured[1];
         const type = (results?.[i * 3 + 1]?.[1] as string) || 'string';
         const ttl = Number(results?.[i * 3 + 2]?.[1]) || -1;
         items.push({ name: k, type, memoryBytes: mem, ttl });
@@ -992,8 +1084,20 @@ export class RedisGatewayClient {
     if (this.status === 'demo' || !this.redis) {
       return this.demoEngine.simulateEviction(maxmemoryBytes, policy);
     }
-    // Fall back to demo logic computed with live info
-    return this.demoEngine.simulateEviction(maxmemoryBytes, policy);
+    const info = await this.getInfo();
+    const sample = await this.sampleKeys(1000);
+    const eligible = policy.startsWith('volatile-') ? sample.filter(key => key.ttlMs >= 0) : sample;
+    const measured = eligible.filter(key => key.memoryBytes !== undefined);
+    const average = measured.length ? measured.reduce((sum, key) => sum + key.memoryBytes!, 0) / measured.length : 0;
+    const deficit = maxmemoryBytes > 0 ? Math.max(0, info.memory.used_memory - maxmemoryBytes) : 0;
+    const total = (await this.getDbSize()).dbsize;
+    const atRisk = average > 0 && policy !== 'noeviction' ? Math.min(total, Math.ceil(deficit / average)) : 0;
+    return { targetMaxmemory: maxmemoryBytes, targetPolicy: policy, currentUsedMemory: info.memory.used_memory,
+      deficitBytes: deficit, keysAtRisk: atRisk, shareAtRiskPercent: total ? atRisk / total * 100 : 0,
+      writesBlocked: deficit > 0 && (policy === 'noeviction' || eligible.length === 0),
+      summary: !average && deficit > 0 ? 'The engine does not provide enough key-size measurements to estimate keys at risk.' : `Estimated ${atRisk} keys at risk based on the current sample.`,
+      method: `Bounded SCAN of ${sample.length} keys; mean MEMORY USAGE of ${measured.length} eligible keys. Estimate only; selection order is not predicted.`,
+      equivalentCommand: [`CONFIG SET maxmemory ${maxmemoryBytes}`, `CONFIG SET maxmemory-policy ${policy}`] };
   }
 
   public async getSoonestExpiringKeys(n = 50): Promise<ExpirationSoonestResponse> {
@@ -1046,7 +1150,27 @@ export class RedisGatewayClient {
     if (this.status === 'demo' || !this.redis) {
       return this.demoEngine.getExpirationHistogram();
     }
-    return this.demoEngine.getExpirationHistogram();
+    const keys = await this.sampleKeys(2000);
+    const counts = [0, 0, 0, 0, 0, 0];
+    for (const key of keys) {
+      if (key.ttlMs === -1) counts[5]++;
+      else if (key.ttlMs >= 0) counts[key.ttlMs < 60000 ? 0 : key.ttlMs < 3600000 ? 1 : key.ttlMs < 86400000 ? 2 : key.ttlMs < 604800000 ? 3 : 4]++;
+    }
+    const labels = ['< 1 minute', '< 1 hour', '< 1 day', '< 7 days', '7 days or more', 'No TTL'];
+    return { totalSampled: keys.length, withTtlCount: keys.length - counts[5], noTtlCount: counts[5],
+      buckets: labels.map((label, index) => ({ label, range: label, count: counts[index], percentage: keys.length ? counts[index] / keys.length * 100 : 0 })) };
+  }
+
+  private async sampleKeys(cap: number): Promise<KeySummary[]> {
+    const found = new Map<string, KeySummary>();
+    let cursor = 0;
+    for (let rounds = 0; rounds < 100; rounds++) {
+      const page = await this.getKeys(cursor, '*', Math.min(cap, 500));
+      page.keys.forEach(key => { if (found.size < cap) found.set(key.name, key); });
+      cursor = page.cursor;
+      if (!cursor || found.size >= cap) break;
+    }
+    return [...found.values()];
   }
 
   public async bulkSetTtl(pattern: string, ttl: number, dryRun = false): Promise<BulkSetTtlResponse> {
@@ -1361,25 +1485,25 @@ export class RedisGatewayClient {
 
       return {
         loading: map['loading'] === '1',
-        rdbLastSaveTime: Number(map['rdb_last_save_time']) || Math.floor(Date.now() / 1000),
-        rdbLastSaveTimeIso: new Date((Number(map['rdb_last_save_time']) || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
-        rdbLastBgsaveStatus: map['rdb_last_bgsave_status'] === 'ok' ? 'ok' : 'err',
+        rdbLastSaveTime: Number(map['rdb_last_save_time']) || 0,
+        rdbLastSaveTimeIso: map['rdb_last_save_time'] && Number(map['rdb_last_save_time']) > 0 ? new Date(Number(map['rdb_last_save_time']) * 1000).toISOString() : '',
+        rdbLastBgsaveStatus: map['rdb_last_bgsave_status'] === 'ok' ? 'ok' : map['rdb_last_bgsave_status'] === 'err' ? 'err' : 'unknown',
         rdbLastBgsaveTimeSec: Number(map['rdb_last_bgsave_time_sec']) || 0,
         rdbCurrentBgsaveTimeSec: Number(map['rdb_current_bgsave_time_sec']) || -1,
         rdbBgsaveInProgress: map['rdb_bgsave_in_progress'] === '1',
         rdbChangesSinceLastSave: Number(map['rdb_changes_since_last_save']) || 0,
-        rdbSizeBytes: 1843200,
+        rdbSizeBytes: Number(map['rdb_last_save_size']) || 0,
         aofEnabled: map['aof_enabled'] === '1',
         aofRewriteInProgress: map['aof_rewrite_in_progress'] === '1',
         aofRewriteScheduled: map['aof_rewrite_scheduled'] === '1',
         aofLastRewriteTimeSec: Number(map['aof_last_rewrite_time_sec']) || 0,
         aofCurrentRewriteTimeSec: Number(map['aof_current_rewrite_time_sec']) || -1,
-        aofLastBgrewriteStatus: map['aof_last_bgrewrite_status'] === 'ok' ? 'ok' : 'err',
+        aofLastBgrewriteStatus: map['aof_last_bgrewrite_status'] === 'ok' ? 'ok' : map['aof_last_bgrewrite_status'] === 'err' ? 'err' : 'unknown',
         aofCurrentSize: Number(map['aof_current_size']) || 0,
         aofBaseSize: Number(map['aof_base_size']) || 0,
         aofBufferDelay: Number(map['aof_buffer_delayed_fsync']) || 0,
         aofFsyncPolicy: fsyncPolicy,
-        saveTimeline: this.demoEngine.getPersistenceInfo().saveTimeline,
+        saveTimeline: [],
       };
     } catch {
       return this.demoEngine.getPersistenceInfo();
@@ -1492,7 +1616,7 @@ export class RedisGatewayClient {
       }
 
       const role = (map['role'] as 'master' | 'slave') || 'master';
-      const backlogSize = Number(map['repl_backlog_size']) || 1048576;
+      const backlogSize = Number(map['repl_backlog_size']) || 0;
       const masterOff = Number(map['master_repl_offset']) || 0;
       const backlogHistlen = Number(map['repl_backlog_histlen']) || 0;
 
@@ -1507,7 +1631,7 @@ export class RedisGatewayClient {
         replBacklogSize: backlogSize,
         replBacklogFirstByteOffset: Number(map['repl_backlog_first_byte_offset']) || 0,
         replBacklogHistlen: backlogHistlen,
-        backlogCoverageSeconds: Math.round(backlogSize / 24500),
+        backlogCoverageSeconds: 0,
         masterHost: map['master_host'],
         masterPort: map['master_port'] ? Number(map['master_port']) : undefined,
         masterLinkStatus: map['master_link_status'] as any,
@@ -1640,14 +1764,16 @@ export class RedisGatewayClient {
       const passRes = await (this.redis as any).config('GET', 'requirepass');
       const hasRequirePass = Array.isArray(passRes) && passRes[1] && passRes[1].length > 0;
       const defaultUserRaw = await (this.redis as any).acl('GETUSER', 'default');
-      const isDefaultNopass = Array.isArray(defaultUserRaw) && defaultUserRaw.includes('nopass');
+      const flagsIndex = Array.isArray(defaultUserRaw) ? defaultUserRaw.indexOf('flags') : -1;
+      const flags: string[] = flagsIndex >= 0 && Array.isArray(defaultUserRaw[flagsIndex + 1]) ? defaultUserRaw[flagsIndex + 1] : [];
+      const isDefaultNopass = flags.includes('nopass');
       const authRequired = hasRequirePass || !isDefaultNopass;
 
       return {
         authRequired,
-        tlsEnabled: false,
+        tlsEnabled: this.tls,
         defaultUserState: {
-          enabled: true,
+          enabled: flags.includes('on'),
           hasPassword: !isDefaultNopass,
           isDangerousAllowed: true,
           summary: isDefaultNopass
@@ -1677,7 +1803,7 @@ export class RedisGatewayClient {
           map[rawAll[i]] = rawAll[i + 1];
         }
       }
-      return metaList.map((meta) => {
+      return metaList.filter(meta => map[meta.name] !== undefined).map((meta) => {
         let current = map[meta.name] !== undefined ? map[meta.name] : meta.default;
         if (meta.type === 'integer' || meta.type === 'bytes') {
           const parsed = Number(current);
@@ -1688,7 +1814,7 @@ export class RedisGatewayClient {
         }
         return {
           ...meta,
-          currentValue: current,
+          currentValue: /pass|secret|token/i.test(meta.name) && current ? '********' : current,
           isChangedFromDefault: JSON.stringify(current) !== JSON.stringify(meta.default),
         };
       });
@@ -1708,19 +1834,20 @@ export class RedisGatewayClient {
 
       const prev = await (this.redis as any).config('GET', param);
       const prevVal = Array.isArray(prev) && prev.length >= 2 ? prev[1] : undefined;
+      await (this.redis as any).config('SET', param, validation.normalizedValue);
       this.configRollbackStack.push({
         parameter: param,
         previousValue: prevVal,
         timestamp: Date.now(),
       });
 
-      await (this.redis as any).config('SET', param, validation.normalizedValue);
+      const sensitive = /pass|secret|token/i.test(param);
       return {
         success: true,
         parameter: param,
-        previousValue: prevVal,
-        newValue: validation.normalizedValue,
-        command: `CONFIG SET ${param} ${validation.normalizedValue}`,
+        previousValue: sensitive ? '********' : prevVal,
+        newValue: sensitive ? '********' : validation.normalizedValue,
+        command: `CONFIG SET ${param} ${sensitive ? '********' : validation.normalizedValue}`,
       };
     } catch (err: any) {
       if (err.message && !err.message.includes('ERR')) throw err;
@@ -1729,22 +1856,23 @@ export class RedisGatewayClient {
   }
 
   public async rollbackConfig(): Promise<{ success: boolean; parameter?: string; rolledBackTo?: any; command?: string; message?: string }> {
-    const item = this.configRollbackStack.pop();
+    if (this.status === 'demo') return this.demoEngine.rollbackConfig();
+    const item = this.configRollbackStack[this.configRollbackStack.length - 1];
     if (!item) {
-      return this.demoEngine.rollbackConfig();
+      return { success: false, message: 'There are no gateway configuration changes to undo.' };
     }
-    if (this.status === 'demo' || !this.redis) {
-      return this.demoEngine.rollbackConfig();
-    }
+    if (!this.redis) throw Object.assign(new Error('The engine is unavailable.'), { statusCode: 503 });
     try {
       if (item.previousValue !== undefined) {
         await (this.redis as any).config('SET', item.parameter, String(item.previousValue));
       }
+      this.configRollbackStack.pop();
+      const masked = /pass|secret|token/i.test(item.parameter) ? '********' : item.previousValue;
       return {
         success: true,
         parameter: item.parameter,
-        rolledBackTo: item.previousValue,
-        command: `CONFIG SET ${item.parameter} ${item.previousValue}`,
+        rolledBackTo: masked,
+        command: `CONFIG SET ${item.parameter} ${masked}`,
       };
     } catch {
       return this.demoEngine.rollbackConfig();
@@ -1767,7 +1895,9 @@ export class RedisGatewayClient {
         host: this.host,
         port: this.port,
         password: this.password,
+        tls: this.tls ? {} : undefined,
         connectTimeout: 5000,
+        commandTimeout: 5000,
         lazyConnect: true,
       });
     } catch {
@@ -1821,5 +1951,3 @@ export class RedisGatewayClient {
     }
   }
 }
-
-

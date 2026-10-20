@@ -1,6 +1,12 @@
 #include "redisx/types/quicklist.h"
 
 namespace redisx::types {
+size_t Quicklist::memory_usage() const {
+    size_t bytes = 0;
+    for (auto *node = head_; node; node = node->next) bytes += sizeof(QuicklistNode) + node->lp.bytes();
+    return bytes;
+}
+
 
 Quicklist::~Quicklist() {
     QuicklistNode *curr = head_;
