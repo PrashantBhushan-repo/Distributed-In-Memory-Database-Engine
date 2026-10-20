@@ -17,7 +17,15 @@ mkdir -p "$STATE_DIR"
 exec 9>"$STATE_DIR/deploy.lock"
 flock -n 9 || { echo 'Another deployment is running' >&2; exit 1; }
 
-docker_cmd() { sudo -n docker "$@"; }
+# Keep one definition before every call. Switch registry configuration when
+# credentials are prepared, rather than redefining this function later.
+docker_cmd() {
+  if [[ -n "$CREDENTIAL_DIR" ]]; then
+    sudo -n env DOCKER_CONFIG="$CREDENTIAL_DIR" docker "$@"
+  else
+    sudo -n docker "$@"
+  fi
+}
 compose() { docker_cmd compose --env-file "$RELEASE_DIR/images.env" -f "$RELEASE_DIR/docker-compose.prod.yml" "$@"; }
 diagnostics() {
   local status=$?
@@ -74,7 +82,6 @@ compose config --quiet
 # Use an ephemeral registry login rather than leaving the Actions token on EC2.
 CREDENTIAL_DIR=$(mktemp -d)
 export DOCKER_CONFIG="$CREDENTIAL_DIR"
-docker_cmd() { sudo -n env DOCKER_CONFIG="$DOCKER_CONFIG" docker "$@"; }
 printf '%s' "$GH_TOKEN" | docker_cmd login ghcr.io -u "$GH_ACTOR" --password-stdin
 unset GH_TOKEN
 compose pull
