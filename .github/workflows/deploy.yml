@@ -56,8 +56,9 @@ jobs:
         run: |
           bash -n infra/scripts/deploy-ec2.sh
           bash -n infra/scripts/prepare-storage.sh
+          bash -n infra/scripts/inspect-ec2.sh
           bash -n tests/scripts/test_deployment.sh
-          shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh tests/scripts/test_deployment.sh
+          shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh tests/scripts/test_deployment.sh
           python3 tests/scripts/test_deploy_orchestration.py
 
   build-and-push:

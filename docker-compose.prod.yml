@@ -174,4 +174,6 @@ services:
 
 volumes:
   prometheus-data:
+    name: ${PROMETHEUS_DATA_VOLUME:-pbredisdb_prometheus-data}
   grafana-data:
+    name: ${GRAFANA_DATA_VOLUME:-pbredisdb_grafana-data}

@@ -9,6 +9,8 @@ RELEASE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
 APP_ROOT=$(cd "$APP_ROOT" && pwd -P)
 export DATA_DIR="$APP_ROOT/data"
 export COMPOSE_PROJECT_NAME=pbredisdb
+PROMETHEUS_DATA_VOLUME=pbredisdb_prometheus-data
+GRAFANA_DATA_VOLUME=pbredisdb_grafana-data
 STATE_DIR="$APP_ROOT/.deploy"
 OLD_ENGINE_STOPPED=false
 CREDENTIAL_DIR=''
@@ -21,12 +23,14 @@ flock -n 9 || { echo 'Another deployment is running' >&2; exit 1; }
 # credentials are prepared, rather than redefining this function later.
 docker_cmd() {
   if [[ -n "$CREDENTIAL_DIR" ]]; then
-    sudo -n env DOCKER_CONFIG="$CREDENTIAL_DIR" docker "$@"
+    sudo -n env DOCKER_CONFIG="$CREDENTIAL_DIR" DATA_DIR="$DATA_DIR" \
+      PROMETHEUS_DATA_VOLUME="$PROMETHEUS_DATA_VOLUME" GRAFANA_DATA_VOLUME="$GRAFANA_DATA_VOLUME" docker "$@"
   else
-    sudo -n docker "$@"
+    sudo -n env DATA_DIR="$DATA_DIR" PROMETHEUS_DATA_VOLUME="$PROMETHEUS_DATA_VOLUME" \
+      GRAFANA_DATA_VOLUME="$GRAFANA_DATA_VOLUME" docker "$@"
   fi
 }
-compose() { docker_cmd compose --env-file "$RELEASE_DIR/images.env" -f "$RELEASE_DIR/docker-compose.prod.yml" "$@"; }
+compose() { docker_cmd compose --project-name "$COMPOSE_PROJECT_NAME" --env-file "$RELEASE_DIR/images.env" -f "$RELEASE_DIR/docker-compose.prod.yml" "$@"; }
 diagnostics() {
   local status=$?
   trap - EXIT
@@ -63,6 +67,11 @@ if ! command -v docker >/dev/null || ! docker_cmd compose version >/dev/null 2>&
 fi
 sudo -n systemctl enable --now docker
 docker_cmd info >/dev/null
+# Inspect old containers before changing storage or stopping any service. Adopt
+# their Compose project and named volumes instead of creating a second stack.
+# shellcheck source=infra/scripts/inspect-ec2.sh
+source "$RELEASE_DIR/infra/scripts/inspect-ec2.sh"
+inspect_ec2
 
 for file in images.env .env.production infra/configs/pbRedis.prod.conf infra/monitoring/prometheus.yml; do
   test -f "$file" || { echo "Missing release file: $file" >&2; exit 1; }

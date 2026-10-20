@@ -36,8 +36,9 @@ The pipeline:
 3. Runs a container test against the actual engine image: initialize root-owned
    storage twice, retain existing contents, write a key, restart and recover it.
 4. Uploads a complete runtime bundle into a unique release directory.
-5. Acquires a host lock, installs Docker if necessary, validates Compose, and
-   pulls images before interrupting existing services.
+5. Acquires a host lock, installs Docker if necessary, inventories existing
+   containers, project labels, volumes, published ports and disk usage; validates
+   Compose and pulls images before interrupting existing services.
 6. Detects the image's actual non-root UID/GID, repairs host data permissions
    without following symlinks, and tests writing as the normal engine user.
 7. Checks backup space, stops the existing engine and takes a consistent local
@@ -72,11 +73,23 @@ downgrade a database binary after it may have changed persistence files.
     previous -> releases/...         # prior verified release
 ```
 
-The Compose project remains `pbredisdb`, preserving the existing Prometheus and
-Grafana named volumes. `DATA_DIR` points to the original absolute data directory,
+The Compose project is passed explicitly with `--project-name`, so release folder
+names never create new stacks. Existing application containers are inspected and
+their project is reused (`pbredisdb` is the default on a fresh host). Existing
+Prometheus and Grafana named volume names are also reused explicitly. Runtime
+storage settings are passed through `sudo env`, which normally drops exported
+shell variables. `DATA_DIR` points to the original absolute data directory,
 so introducing release directories does not start an empty database. Old files in
 the application root are no longer used for new releases. Do not edit EC2 copies;
 update repository configuration and run the workflow.
+
+Unknown container ownership, mixed projects, a different existing engine data
+mount, or an unrelated Docker container publishing a required port fail preflight
+before stopping the database. No unknown containers or volumes are removed.
+The Actions log provides the EC2 inventory automatically; a separate manual SSH
+inspection is not required for each deployment. Cached images and unused networks
+from previous failed deployments are not themselves container-name conflicts.
+No blanket Docker pruning is performed.
 
 The engine's numeric user and group are discovered from its image. The deployment
 fixes existing root/SSH-user-owned persistence automatically; Dockerfile ownership
@@ -99,7 +112,7 @@ current workflow continues using the existing authorized SSH secrets.
 ## Validation
 
 ```bash
-shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh tests/scripts/test_deployment.sh
+shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh tests/scripts/test_deployment.sh
 python3 tests/scripts/test_deploy_orchestration.py
 ENGINE_IMAGE=ghcr.io/<owner>/pbredisdb-engine@sha256:<digest> bash tests/scripts/test_deployment.sh
 ```

@@ -26,7 +26,7 @@ class DeploymentTests(unittest.TestCase):
         (self.release / "infra/monitoring").mkdir()
         (self.app / "data").mkdir()
         (self.app / "data/appendonly.aof").write_bytes(b"existing database")
-        for name in ("deploy-ec2.sh", "prepare-storage.sh"):
+        for name in ("deploy-ec2.sh", "prepare-storage.sh", "inspect-ec2.sh"):
             shutil.copyfile(ROOT / "infra/scripts" / name, self.release / "infra/scripts" / name)
         for name in (".env.production", "docker-compose.prod.yml", "infra/configs/pbRedis.prod.conf", "infra/monitoring/prometheus.yml"):
             (self.release / name).write_text("test fixture\n")
@@ -40,7 +40,8 @@ class DeploymentTests(unittest.TestCase):
         self.log = self.root / "commands.jsonl"
         self.credentials = self.root / "credentials"
         self.credentials.mkdir()
-        self.write_tool("sudo", '#!/bin/sh\n[ "$1" != -n ] || shift\nexec "$@"\n')
+        # Model sudo's env_reset: deployment settings must be passed explicitly.
+        self.write_tool("sudo", '#!/bin/sh\n[ "$1" != -n ] || shift\nexec env -u DATA_DIR -u COMPOSE_PROJECT_NAME -u DOCKER_CONFIG -u PROMETHEUS_DATA_VOLUME -u GRAFANA_DATA_VOLUME "$@"\n')
         self.write_tool("systemctl", "#!/bin/sh\nexit 0\n")
         self.write_tool("curl", "#!/bin/sh\nexit 0\n")
         self.write_tool("mktemp", '#!/bin/sh\nmkdir -p "$TEST_CREDENTIALS"\nprintf "%s\\n" "$TEST_CREDENTIALS"\n')
@@ -49,8 +50,26 @@ import json, os, sys
 args = sys.argv[1:]
 with open(os.environ["TEST_LOG"], "a") as log:
     log.write(json.dumps(args) + "\\n")
+    if args[:1] == ["compose"] and "--project-name" in args:
+        log.write(json.dumps(["compose-context", os.environ.get("DATA_DIR"), os.environ.get("PROMETHEUS_DATA_VOLUME"), os.environ.get("GRAFANA_DATA_VOLUME")]) + "\\n")
+project = os.environ.get("TEST_PROJECT", "pbredisdb")
+services = {"redisx-server": "redisx", "redisx-gateway": "gateway", "redisx-web": "web", "redisx-prometheus": "prometheus", "redisx-grafana": "grafana"}
+if args[:1] == ["inspect"]:
+    template = args[2]
+    if "com.docker.compose.project" in template:
+        print("different-project" if os.environ.get("TEST_SPLIT_PROJECT") and args[-1] == "redisx-web" else project)
+    elif "com.docker.compose.service" in template:
+        print(services[args[-1]])
+    elif '.Destination "/data"' in template:
+        print(os.environ.get("TEST_DATA_DIR", os.environ["APP_ROOT"] + "/data"))
+    elif '.Destination "/prometheus"' in template:
+        print(os.environ.get("TEST_PROMETHEUS_VOLUME", project + "_prometheus-data"))
+    elif '.Destination "/var/lib/grafana"' in template:
+        print(os.environ.get("TEST_GRAFANA_VOLUME", project + "_grafana-data"))
 if args[:1] == ["login"]:
     sys.stdin.read()
+if args[:1] == ["ps"] and "publish=6379" in args and os.environ.get("TEST_PORT_CONFLICT"):
+    print("unrelated-database")
 if args[:1] == ["run"] and "id -u; id -g" in args:
     print("999\\n999")
 if args[:1] == ["inspect"] and "{{.State.Running}}" in args:
@@ -88,6 +107,10 @@ if args[:1] == ["compose"] and "pull" in args and os.environ.get("FAIL_PULL"):
         up = next(cmd for cmd in commands if cmd[0] == "compose" and "up" in cmd)
         self.assertIn("--wait", up)
         self.assertIn("--force-recreate", up)
+        self.assertEqual(up[up.index("--project-name") + 1], "pbredisdb")
+        contexts = [cmd for cmd in commands if cmd[0] == "compose-context"]
+        self.assertTrue(contexts)
+        self.assertTrue(all(cmd[1] == str(self.app / "data") for cmd in contexts))
         self.assertTrue(any(cmd[0] == "exec" for cmd in commands))
 
     def test_failed_start_keeps_exit_status_and_collects_logs(self):
@@ -116,6 +139,33 @@ if args[:1] == ["compose"] and "pull" in args and os.environ.get("FAIL_PULL"):
         self.assertEqual(result.returncode, 44)
         self.assertIn(["start", "redisx-server"], self.commands())
         self.assertFalse(any(cmd[0] == "compose" and "up" in cmd for cmd in self.commands()))
+
+    def test_existing_project_and_monitoring_volumes_are_preserved(self):
+        result = self.deploy(TEST_PROJECT="legacy-stack", TEST_PROMETHEUS_VOLUME="existing-prom", TEST_GRAFANA_VOLUME="existing-grafana")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        commands = self.commands()
+        compose = [cmd for cmd in commands if cmd[0] == "compose" and "--project-name" in cmd]
+        self.assertTrue(all(cmd[cmd.index("--project-name") + 1] == "legacy-stack" for cmd in compose))
+        contexts = [cmd for cmd in commands if cmd[0] == "compose-context"]
+        self.assertTrue(all(cmd[2:] == ["existing-prom", "existing-grafana"] for cmd in contexts))
+
+    def test_different_database_mount_is_not_replaced(self):
+        result = self.deploy(TEST_DATA_DIR="/different-database")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Refusing to switch databases", result.stderr)
+        self.assertFalse(any(cmd[0] in ("stop", "run") for cmd in self.commands()))
+
+    def test_mixed_projects_are_not_removed(self):
+        result = self.deploy(TEST_SPLIT_PROJECT="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("different projects", result.stderr)
+        self.assertFalse(any(cmd[0] in ("stop", "rm", "run") for cmd in self.commands()))
+
+    def test_unrelated_port_owner_is_detected_before_stopping_database(self):
+        result = self.deploy(TEST_PORT_CONFLICT="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unrelated container", result.stderr)
+        self.assertFalse(any(cmd[0] in ("stop", "rm", "run") for cmd in self.commands()))
 
 
 if __name__ == "__main__":
