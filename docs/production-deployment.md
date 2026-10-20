@@ -22,6 +22,14 @@ registry credential is removed when the deployment exits.
 
 ## Deploy
 
+This project's `.env.production` sets `STUDIO_AUTH_MODE=open`: Studio opens
+directly without a username/password page, and the gateway accepts HTTP and
+WebSocket requests without an account. Open visitors receive the administrative
+workspace role; existing command validation and explicit destructive-operation
+confirmation still apply. Set `STUDIO_AUTH_MODE=authenticated` in that file to
+require gateway accounts again. Do not enable open mode for a private database
+unless access to the instance is otherwise restricted.
+
 Push to `main`, `feature/packaging-and-docs`, or `feature/redis-studio`, or run the
 workflow manually with a branch/commit. These branches share the existing EC2
 environment. Actions serializes runs and never cancels a deployment mid-flight.

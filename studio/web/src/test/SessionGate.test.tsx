@@ -5,6 +5,16 @@ import { SessionGate } from '../components/SessionGate';
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 describe('Workspace access discovery', () => {
+  it('opens the production workspace without a login form or stale credentials in open mode', async () => {
+    localStorage.setItem('redisx_token', 'expired-token');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ accessMode: 'open' }) }));
+    render(<SessionGate>Workspace contents</SessionGate>);
+    expect(await screen.findByText('Workspace contents')).toBeTruthy();
+    expect(screen.queryByLabelText('Username')).toBeNull();
+    expect(screen.queryByLabelText('Password')).toBeNull();
+    expect(localStorage.getItem('redisx_token')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('redisx_user') ?? '{}').accessMode).toBe('open');
+  });
   it('retries a failed health request without showing sign-in or granting access', async () => {
     vi.useFakeTimers();
     const fetch = vi.fn().mockRejectedValueOnce(new Error('Gateway restarting'))

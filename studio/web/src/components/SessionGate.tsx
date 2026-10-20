@@ -22,11 +22,11 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
         const response = await fetch('/health', { signal: request.signal });
         if (!response.ok) throw new Error('Gateway unavailable');
         const health = await response.json();
-        if (!['playground', 'authenticated'].includes(health.accessMode)) throw new Error('Gateway not ready');
+        if (!['open', 'playground', 'authenticated'].includes(health.accessMode)) throw new Error('Gateway not ready');
         if (disposed) return;
-        if (health.accessMode === 'playground') {
+        if (health.accessMode === 'playground' || health.accessMode === 'open') {
           localStorage.removeItem('redisx_token');
-          localStorage.setItem('redisx_user', JSON.stringify({ username: 'Local Explorer', role: 'admin' }));
+          localStorage.setItem('redisx_user', JSON.stringify({ username: health.accessMode === 'open' ? 'Studio Explorer' : 'Local Explorer', role: 'admin', accessMode: health.accessMode }));
           setToken(null); setPlayground(true);
         } else setPlayground(false);
         setGatewayError(''); setChecking(false);

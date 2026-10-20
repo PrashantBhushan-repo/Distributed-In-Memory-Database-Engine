@@ -13,7 +13,7 @@ import { playgroundEngine } from './playground/engine.js';
 import { env } from './config/env.js';
 import { databaseContext } from './redis/context.js';
 import { LivePlayground, sandboxTokens } from './playground/live.js';
-import { isLocalPlayground } from './auth/playground.js';
+import { studioAccessMode } from './auth/playground.js';
 
 const app = Fastify({
   logger: {
@@ -98,7 +98,7 @@ app.addHook('onRequest', (req, reply, done) => {
 app.addHook('preValidation', async (req, reply) => {
   if (!req.url.startsWith('/api/') && !req.url.startsWith('/ws/')) return;
   if (req.url.split('?')[0] === '/api/auth/login') return;
-  if (isLocalPlayground(env, req.ip)) return;
+  if (studioAccessMode(env, req.ip) !== 'authenticated') return;
   const queryToken = req.url.startsWith('/ws/') ? new URL(req.url, 'http://localhost').searchParams.get('token') : null;
   const token = req.headers.authorization?.replace(/^Bearer /, '') ?? queryToken;
   if (!token || !await verifyToken(token)) return reply.status(401).send({ code: 'UNAUTHORIZED', error: 'Sign in to RedisX Studio to continue.' });
@@ -123,7 +123,8 @@ function checkLoginRateLimit(key: string): boolean {
 
 // Auth helper
 async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<UserContext | null> {
-  if (isLocalPlayground(env, req.ip)) return { username: 'Local Explorer', role: 'admin' };
+  const accessMode = studioAccessMode(env, req.ip);
+  if (accessMode !== 'authenticated') return { username: accessMode === 'open' ? 'Studio Explorer' : 'Local Explorer', role: 'admin' };
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     reply.status(401).send({ error: 'Sign in to RedisX Studio to continue.' });
@@ -144,7 +145,7 @@ app.get('/health', async (req) => {
   return {
     status: 'ok',
     gateway: 'healthy',
-    accessMode: isLocalPlayground(env, req.ip) ? 'playground' : 'authenticated',
+    accessMode: studioAccessMode(env, req.ip),
     timestamp: new Date().toISOString(),
     redis: status,
   };
@@ -1311,7 +1312,8 @@ app.get('/ws/monitor', { websocket: true }, async (connectionOrSocket: any, req)
 
   // Validate operator+ role
   let user: UserContext = { username: 'unknown', role: 'viewer' };
-  if (isLocalPlayground(env, req.ip)) user = { username: 'Local Explorer', role: 'admin' };
+  const accessMode = studioAccessMode(env, req.ip);
+  if (accessMode !== 'authenticated') user = { username: accessMode === 'open' ? 'Studio Explorer' : 'Local Explorer', role: 'admin' };
   try {
     const urlObj = new URL(req.url, 'http://localhost');
     const token = urlObj.searchParams.get('token');

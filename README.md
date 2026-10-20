@@ -89,7 +89,7 @@ The explicit environment settings above disable the development file's automatic
 
 ### Local access and configuration
 
-The local playground opens without sign-in only when all four conditions hold: `STUDIO_PLAYGROUND=true`, development mode, a loopback bind address, and a direct loopback peer. Authenticated deployments retain JWT sessions and viewer/operator/admin roles. These local settings are not a production security configuration.
+Studio opens without sign-in in this project's development and production profiles (`STUDIO_AUTH_MODE=open`). The gateway grants account-free workspace access to HTTP and WebSocket clients, and the UI does not show a login form or sign-out control. Anyone who can reach an open instance can use its administrative workspace. Set `STUDIO_AUTH_MODE=authenticated` to require configured gateway accounts; set `STUDIO_PLAYGROUND=false` too when requiring local sign-in. Authenticated mode retains JWT sessions and viewer/operator/admin roles. The separate local playground bypass applies only to explicitly enabled loopback development sessions.
 
 The gateway reads shell environment variables first, then its selected `.env` file. See [.env.example](.env.example) and [the environment schema](studio/gateway/src/config/env.ts) for connection, TLS, access, and CORS settings. One connection change affects all users of that gateway.
 

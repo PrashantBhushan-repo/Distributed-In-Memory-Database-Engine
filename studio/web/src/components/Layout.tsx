@@ -120,9 +120,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const online = !stale && connectionState === 'connected';
   const statusLabel = engine?.isDemo ? 'Demo data' : online ? 'Live engine' : hasSample ? 'Readings are stale' : 'Connecting';
   const endpoint = engine ? `${engine.host}:${engine.port}` : 'Waiting for gateway';
-  let user = { username: 'Account', role: 'viewer' };
+  let user = { username: 'Account', role: 'viewer', accessMode: 'authenticated' };
   try { user = JSON.parse(localStorage.getItem('redisx_user') ?? '{}'); } catch { /* Missing account metadata. */ }
-  const playground = user.username === 'Local Explorer';
+  const playground = user.username === 'Local Explorer' || user.accessMode === 'open';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -161,7 +161,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </NavLink>;
         })}
       </div>)}</nav>
-      <div className="studio-sidebar-bottom">{playground ? <div className="studio-account"><span className="studio-avatar"><Terminal size={14} /></span><span className="studio-nav-label"><strong>Engine playground</strong><small>No sign-in required</small></span></div> : <button className="studio-account" onClick={() => { localStorage.removeItem('redisx_token'); localStorage.removeItem('redisx_user'); window.dispatchEvent(new Event('redisx:unauthorized')); }} title="Sign out">
+      <div className="studio-sidebar-bottom">{playground ? <div className="studio-account"><span className="studio-avatar"><Terminal size={14} /></span><span className="studio-nav-label"><strong>{user.accessMode === 'open' ? 'Studio workspace' : 'Engine playground'}</strong><small>No sign-in required</small></span></div> : <button className="studio-account" onClick={() => { localStorage.removeItem('redisx_token'); localStorage.removeItem('redisx_user'); window.dispatchEvent(new Event('redisx:unauthorized')); }} title="Sign out">
         <span className="studio-avatar">{user.username?.slice(0, 1).toUpperCase()}</span><span className="studio-nav-label"><strong>{user.username}</strong><small>{user.role} · Sign out</small></span>
       </button>}<button className="studio-icon-button studio-collapse" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}>{collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}</button></div>
     </aside>

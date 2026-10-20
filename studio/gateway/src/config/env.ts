@@ -34,6 +34,7 @@ const EnvSchema = z.object({
   REDIS_PASSWORD: z.string().default(''),
   REDIS_TLS: environmentBoolean.default(false),
   STUDIO_PLAYGROUND: environmentBoolean.default(false),
+  STUDIO_AUTH_MODE: z.enum(['open', 'authenticated']).default('authenticated'),
   DEMO_MODE: environmentBoolean.default(false),
   DEMO_FALLBACK: environmentBoolean.default(false),
   JWT_SECRET: z
