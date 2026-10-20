@@ -20,6 +20,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Reject tracked Node dependencies and build output
+        shell: bash
+        run: |
+          generated=$(git ls-files -- ':(glob)**/node_modules/**' 'studio/gateway/dist/**' 'studio/web/dist/**')
+          if [ -n "$generated" ]; then
+            echo '::error::Generated Node files are tracked. Untrack node_modules and Studio dist directories; keep package.json and lockfiles.'
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           sudo apt-get update

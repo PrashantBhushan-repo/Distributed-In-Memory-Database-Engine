@@ -37,8 +37,10 @@ Makefile
 install_manifest.txt
 
 # Node & Studio
+# Generated dependencies and build output; keep package.json and lockfiles tracked.
 node_modules/
 dist/
+.vite/
 .turbo/
 npm-debug.log*
 yarn-debug.log*
