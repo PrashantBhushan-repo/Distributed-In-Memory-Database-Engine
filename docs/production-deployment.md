@@ -45,7 +45,10 @@ The pipeline:
    backup. If backup fails, restarts that same existing container and fails CI.
 8. Recreates services (including config-only changes), waits up to 180 seconds
    for Compose readiness, then verifies gateway-to-engine connectivity, web,
-   Prometheus and Grafana HTTP readiness.
+   Prometheus and Grafana HTTP readiness. Each HTTP check names the service and
+   retries startup connection resets and HTTP errors with a 120-second retry
+   budget (at most five seconds per request). Services without container health
+   checks must still pass these HTTP checks; running alone is not readiness.
 9. Records the successful release, retains three completed backups and removes
    its temporary registry login.
 
@@ -112,8 +115,9 @@ current workflow continues using the existing authorized SSH secrets.
 ## Validation
 
 ```bash
-shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh tests/scripts/test_deployment.sh
+shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh infra/scripts/wait-http.sh tests/scripts/test_deployment.sh
 python3 tests/scripts/test_deploy_orchestration.py
+python3 tests/scripts/test_http_readiness.py
 ENGINE_IMAGE=ghcr.io/<owner>/pbredisdb-engine@sha256:<digest> bash tests/scripts/test_deployment.sh
 ```
 

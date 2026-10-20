@@ -133,9 +133,13 @@ docker_cmd exec redisx-gateway node --input-type=module -e '
   console.error("Gateway did not connect to the real engine");
   process.exit(1);
 '
-curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3000/ >/dev/null
-curl --fail --silent --show-error --max-time 15 http://127.0.0.1:9090/-/ready >/dev/null
-curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3002/api/health >/dev/null
+# Compose only checks "running" for services without a container healthcheck.
+# Grafana in particular may spend time loading plugins before opening HTTP.
+# shellcheck source=infra/scripts/wait-http.sh
+source "$RELEASE_DIR/infra/scripts/wait-http.sh"
+wait_http 'Studio Web' http://127.0.0.1:3000/
+wait_http Prometheus http://127.0.0.1:9090/-/ready
+wait_http Grafana http://127.0.0.1:3002/api/health
 if [[ -L "$STATE_DIR/current" ]]; then
   ln -sfn "$(readlink "$STATE_DIR/current")" "$STATE_DIR/previous"
 fi

@@ -57,9 +57,11 @@ jobs:
           bash -n infra/scripts/deploy-ec2.sh
           bash -n infra/scripts/prepare-storage.sh
           bash -n infra/scripts/inspect-ec2.sh
+          bash -n infra/scripts/wait-http.sh
           bash -n tests/scripts/test_deployment.sh
-          shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh tests/scripts/test_deployment.sh
+          shellcheck infra/scripts/deploy-ec2.sh infra/scripts/prepare-storage.sh infra/scripts/inspect-ec2.sh infra/scripts/wait-http.sh tests/scripts/test_deployment.sh
           python3 tests/scripts/test_deploy_orchestration.py
+          python3 tests/scripts/test_http_readiness.py
 
   build-and-push:
     name: Build immutable images and test persistence

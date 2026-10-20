@@ -26,7 +26,7 @@ class DeploymentTests(unittest.TestCase):
         (self.release / "infra/monitoring").mkdir()
         (self.app / "data").mkdir()
         (self.app / "data/appendonly.aof").write_bytes(b"existing database")
-        for name in ("deploy-ec2.sh", "prepare-storage.sh", "inspect-ec2.sh"):
+        for name in ("deploy-ec2.sh", "prepare-storage.sh", "inspect-ec2.sh", "wait-http.sh"):
             shutil.copyfile(ROOT / "infra/scripts" / name, self.release / "infra/scripts" / name)
         for name in (".env.production", "docker-compose.prod.yml", "infra/configs/pbRedis.prod.conf", "infra/monitoring/prometheus.yml"):
             (self.release / name).write_text("test fixture\n")
