@@ -6,6 +6,8 @@
 #include <charconv>
 
 #include <cstdio>
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <limits>
 
@@ -49,6 +51,11 @@ bool AofManager::open(const std::string &filepath, FsyncPolicy policy) {
     filepath_ = filepath;
     policy_ = policy;
     fd_ = ::open(filepath.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+    if (fd_ < 0) {
+        const int open_error = errno;
+        REDISX_LOG_ERROR("Cannot open AOF '%s' for writing: %s (errno=%d)",
+                         filepath.c_str(), std::strerror(open_error), open_error);
+    }
     is_open_ = fd_ >= 0;
     healthy_ = is_open_;
     current_db_ = db::Keyspace::NUM_DATABASES;

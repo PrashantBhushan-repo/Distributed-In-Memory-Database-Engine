@@ -27,11 +27,17 @@ bool PersistenceService::open() {
     std::istringstream rules(config_.get_string("save"));
     std::string first, second;
     while (rules >> first) {
-        if (!(rules >> second)) return false;
+        if (!(rules >> second)) {
+            REDISX_LOG_ERROR("Invalid save schedule: expected pairs of seconds and changes");
+            return false;
+        }
         std::uint64_t seconds = 0, changes = 0;
         auto [seconds_end, seconds_error] = std::from_chars(first.data(), first.data() + first.size(), seconds);
         auto [changes_end, changes_error] = std::from_chars(second.data(), second.data() + second.size(), changes);
-        if (seconds_error != std::errc{} || changes_error != std::errc{} || seconds_end != first.data() + first.size() || changes_end != second.data() + second.size() || !seconds || !changes) return false;
+        if (seconds_error != std::errc{} || changes_error != std::errc{} || seconds_end != first.data() + first.size() || changes_end != second.data() + second.size() || !seconds || !changes) {
+            REDISX_LOG_ERROR("Invalid save schedule: seconds and changes must be positive integers");
+            return false;
+        }
         save_rules_.emplace_back(seconds, changes);
     }
     if (!enabled_) return true;

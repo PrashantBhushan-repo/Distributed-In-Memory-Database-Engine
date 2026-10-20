@@ -1,0 +1,5 @@
+# Linux runtime and deployment scripts must remain LF on Windows checkouts.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.py text eol=lf
