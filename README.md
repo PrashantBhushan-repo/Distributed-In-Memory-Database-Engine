@@ -1,4 +1,4 @@
-# RedisX (pbRedisDB)
+# pbRedisDB
 
 A C++20 in-memory database with a browser workspace for inspecting the engine that actually stores your data.
 
